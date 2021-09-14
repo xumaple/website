@@ -1,5 +1,5 @@
 
-# 9/13/21
+# 9/13/21 \[60 min]
 
 Hello! This is the very first post on my blog. Today, I plan on starting a new project: creating the very website that YOU are currently viewing (hopefully)! I recently bought the domain maplexu.me to encourage myself to actually make a website, and so here we are now, after 3+ years of dreaming about what it could look like.
 
@@ -29,7 +29,7 @@ And now, finally, getting to the actual website itself: I've decided to start wi
 - [Next.js](nextjs.org) seems like a really good option to go with for pure Javascript websites. Buuuut I am not a huge fan of javascript :)
 - Using Flask/React seems like a really easy option, especially since I already have this [bootstrap code](https://github.com/xumaple/create-web-app) I created because I got tired of making new Flask/React apps from scratch...
 
-But in the end, I chose to go with **Next.js**, since it's a technology I haven't used much of before, and I also don't want to have to worry about coding in multiple languages for this project. Plus, Flask is really bad... D:
+But in the end, I chose to go with **Next.js**, since it's a technology I haven't used much of before, and I also don't want to have to worry about coding in multiple languages for this project. Plus, in my opinion, Flask is really bad... D:
 
 So, with just a single command of ```npx create-next-app```, we have a full-blown app here:
 
@@ -38,3 +38,7 @@ So, with just a single command of ```npx create-next-app```, we have a full-blow
 The next question I'm asking myself is, should this whole project be *one* web app, or multiple, one for each general endpoint? If I make everything a single project, then styling things consistently becomes very simple. However, as it grows, it becomes increasingly difficult to build, since things are not as well compartmentalizeable... (wow that is a BIG word.. *is* it a word?? [Merriam webster says no...](https://www.merriam-webster.com/dictionary/compartmentalizeable))
 
 ANYWAYS, I debated it for awhile, and I decided to proceed by building the blog component as its own web app. In the future, if I want to share styles across my multiple components, I can find some way to refactor it. Even if it has to be a bit hacky, I'm sure I'll be able to figure out a way :)
+
+So.... everything got moved into the blog folder. Woohoo! I'm calling it a day here.
+
+You can see my progress [here](https://github.com/xumaple/website/tree/75edb00cc49c198a7263e7c0c42d0f8dd01121d5)!
