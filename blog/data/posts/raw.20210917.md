@@ -68,4 +68,4 @@ There's still a lot to do, in terms of getting it to look more presentable and a
 
 *(also, this post labeled '9/17' technically started 9/17 and now it's 9/25 LOL, side projects really don't get much time out here..)*
 
-You can see my progress [here](https://github.com/xumaple/website/tree/d419a26a2f5e76246df512d3c016ec50ca56b7a4)!
+You can see my progress [here](https://github.com/xumaple/website/tree/d419a26a2f5e76246df512d3c016ec50ca56b7a4/blog)!
