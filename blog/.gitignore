@@ -1,0 +1,4 @@
+.env*
+../.vscode/
+.next/
+firebase/firebase_key.js
