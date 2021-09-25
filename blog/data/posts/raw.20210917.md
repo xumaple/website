@@ -67,3 +67,5 @@ Alright, so after a ton of hacking around, and deciding to use the [react-markdo
 There's still a lot to do, in terms of getting it to look more presentable and also fixing those broken image links, but we'll call it a day here. 
 
 *(also, this post labeled '9/17' technically started 9/17 and now it's 9/25 LOL, side projects really don't get much time out here..)*
+
+You can see my progress [here](https://github.com/xumaple/website/tree/d419a26a2f5e76246df512d3c016ec50ca56b7a4)!
