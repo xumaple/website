@@ -4,10 +4,12 @@ Hello! Last time, I sort of got the file system set, and was able to start a loc
 
 ## Home page? (sort of)
 
-I actually quite like the style that next.js default has, so I'm going to start with that and build out my blog from there. My plan for the blog's home page is to have each project be a separate section, so I tried that out, with the only project I have going for now: 
+I actually quite like the style that next.js default has, so I'm going to start with that and build out my blog from there. My plan for the blog's home page is to have each project be a separate section, so I tried that out, with the only project I have going for now:
+
 ![websitecard](pictures/20210915-1.png)
 
-But something was wrong with the css. Rather than debugging the css and fixing it... I'm filing it for things to do later. Maybe if I add another card, it would look better...? 
+But something was wrong with the css. Rather than debugging the css and fixing it... I'm filing it for things to do later. Maybe if I add another card, it would look better...?
+
 ![websitecard2](pictures/20210915-2.png)
 
 Tada! Css is no longer messed up. Fix the problem by avoiding it :)

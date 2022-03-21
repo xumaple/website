@@ -21,8 +21,11 @@ export async function getStaticProps(context) {
 
   for (let p of posts) {
     let {post} = p;
-    post.title = (await readPostFile(post.filename)).split('\n')[0].split('# ').slice(-1)[0];
+    const lines = (await readPostFile(post.filename)).split('\n');
+    post.title = lines[0].split('# ').slice(-1)[0];
+    post.description = `${lines[1]}${lines[2]}${lines[3]}`.substring(0, 100).concat('...');
     if (post.title === undefined) post.title = "";
+    if (post.description === undefined) post.description = "";
   }
   return { props: { proj, posts } };
 }
@@ -61,7 +64,7 @@ export default function Project({ proj, posts }) {
             href={key?`/project/${prid}/post/${key}`:undefined}
           >
             <h2><Markdown>{post.title}</Markdown> &rarr;</h2>
-            <p>{proj.description}</p>
+            <p>{post.description}</p>
           </a>):""}
         </div>
       </main>

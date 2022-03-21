@@ -1,0 +1,1 @@
+cp data/posts/pictures/* public/pictures/
