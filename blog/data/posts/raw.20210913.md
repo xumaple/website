@@ -1,4 +1,3 @@
-
 # 9/13/21 \[60 min]
 
 Hello! This is the very first post on my blog. Today, I plan on starting a new project: creating the very website that YOU are currently viewing (hopefully)! I recently bought the domain maplexu.me to encourage myself to actually make a website, and so here we are now, after 3+ years of dreaming about what it could look like.

@@ -1,12 +1,19 @@
 import Head from 'next/head'
 import Image from 'next/image'
 import styles from '../styles/Home.module.css'
+import db from '../firebase/model.ts';
+import { PROJ_LIST_C, PROJ_ORDER_C } from '../consts.ts';
 
-export default function Home() {
-  let projects = [
-    {name: 'Website', description: 'My website!', prid: 2},
-    {name: 'My next project', description: 'Coming soon!'}
-  ]
+export async function getStaticProps(context) {
+  let projects = (await db.getChildrenKeyVals(PROJ_LIST_C, PROJ_ORDER_C)).map((p) => ({
+    prid: p.key, ...p.val
+  }));
+  projects.push({name: 'My next project', description: 'Coming soon!', order: 99999});
+  console.log(projects)
+  return { props: { projects } };
+}
+
+export default function Home({ projects }) {
   return (
     <div className={styles.container}>
       <Head>
