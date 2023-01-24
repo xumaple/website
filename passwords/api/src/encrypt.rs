@@ -56,6 +56,12 @@ impl MasterKey {
         })
     }
 
+    pub fn new_and_encrypt(password: String) -> Result<MasterKey, CryptoError> {
+        let mut master_key = MasterKey::new(password)?;
+        master_key.encrypt()?;
+        Ok(master_key)
+    }
+
     /// Hashes the unencrypted [master_pw] with the [salt] and replaces it
     pub fn encrypt(&mut self) -> Result<(), CryptoError> {
         if self.encrypted {

@@ -33,9 +33,9 @@ impl Into<Bson> for PasswordKV {
     }
 }
 
-impl PasswordKV {
-    pub fn to_bson(&self) -> Bson {
-        Into::<Bson>::into(self)
+impl Into<Bson> for MasterKey {
+    fn into(self) -> Bson {
+        to_bson(&self).unwrap()
     }
 }
 
@@ -89,8 +89,7 @@ pub async fn add_user(username: String, password: String) -> Result<(), DbError>
         });
     }
 
-    let mut master_key = MasterKey::new(password)?;
-    master_key.encrypt()?;
+    let master_key = MasterKey::new_and_encrypt(password)?;
 
     db.insert_one(
         &User {
@@ -102,6 +101,13 @@ pub async fn add_user(username: String, password: String) -> Result<(), DbError>
     )
     .await?;
 
+    Ok(())
+}
+
+pub async fn verify_user(username: String, password: String) -> Result<(), DbError> {
+    let en_user = user2oid(&username);
+    let user = find_user(username, en_user).await?;
+    verify_master_key(password, &user.master_key)?;
     Ok(())
 }
 
@@ -124,6 +130,14 @@ pub async fn find_user(username: String, en_user: ObjectId) -> Result<User, DbEr
             });
         }
     }
+}
+
+pub async fn get_stored_passwords(username: String, password: String) -> Result<Vec<String>, DbError> {
+    let en_user = user2oid(&username);
+    let user = find_user(username, en_user).await?;
+    verify_master_key(password, &user.master_key)?;
+
+    Ok(user.stored_passwords.into_iter().map(|kv| kv.en_password).collect())
 }
 
 pub async fn add_stored_password(
@@ -196,6 +210,47 @@ pub async fn change_stored_password(
         None,
     )
     .await?;
+
+    Ok(())
+}
+
+pub async fn change_master_password(
+    username: String,
+    password: String,
+    new_password: String,
+    updated_stored_passwords: Vec<String>,
+) -> Result<(), DbError> {
+    let db = DB.get().unwrap();
+    let en_user = user2oid(&username);
+    let user = find_user(username, en_user).await?;
+    verify_master_key(password, &user.master_key)?;
+
+    if user.stored_passwords.len() != updated_stored_passwords.len() {
+        return Err(DbError::GenericError {
+            error_msg: format!("Expected {} updated passwords, found {}", 
+                user.stored_passwords.len(), 
+                updated_stored_passwords.len()),
+        });
+    }
+
+    let new_mk = MasterKey::new_and_encrypt(new_password)?;
+
+    db.update_one(
+        doc! {
+            "_id": en_user
+        },
+        doc! {
+            "$set": {
+                "master_key": Into::<Bson>::into(new_mk),
+                "stored_passwords": user.stored_passwords
+                    .into_iter()
+                    .zip(updated_stored_passwords.into_iter())
+                    .map(|(kv, en_password)| PasswordKV { key: kv.key, en_password })
+                    .collect::<Vec<PasswordKV>>()
+            }
+        },
+        None,
+    ).await?;
 
     Ok(())
 }
