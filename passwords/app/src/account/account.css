@@ -1,0 +1,40 @@
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+
+.SignIn {}
+
+.SignIn-info {
+    text-align: left;
+    /* width: 200px;
+    padding: 20px; */
+}
+
+.SignIn-link {
+    color: red;
+}
+
+.SignIn-link:hover {
+    cursor: pointer;
+}
+
+input[type=text], input[type="password"] {
+    padding: 10px;
+    margin:10px 0;
+    font-size: calc(5px + 2vmin)
+}
+
+.SignIn-error {
+    color: red;
+    font-style: italic;
+    font-size: calc(3vmin);
+    padding:5px;
+}
+
+.SignIn-error-invis {
+    color: #282c34;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}

@@ -1,25 +1,44 @@
 import logo from './logo.svg';
 import './App.css';
+import SignIn from './account/signIn';
+import PasswordQuery from './account/passwordQuery';
+import { hideLoader } from './loader/loader';
+import { useState, useEffect } from 'react';
 
-function App() {
+export default function App() {
+  useEffect(hideLoader);
+  let [isSignedIn, setIsSignedIn] = useState(false);
+  let [username, setUsername] = useState("");
+  let [password, setPassword] = useState("");
+
+  const setAccountInfo = (user, pw) => {
+    setUsername(user);
+    setPassword(pw);
+    setIsSignedIn(true);
+  }
+
+  const resetAccountInfo = () => {
+    setPassword("");
+    setIsSignedIn(false);
+  }
+
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload. try
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <div className="App-header">
+        <p>{isSignedIn ? `Hello, ${username}` : "Welcome to ObscurePasswordManager!"}</p>
+        <div className="App-subheader">
+          {isSignedIn ?
+            <PasswordQuery
+              username={username}
+              password={password}
+              reset={resetAccountInfo}
+            /> :
+            <SignIn 
+              user={username}
+              setAccountInfo={setAccountInfo}
+            />}
+        </div>
+      </div>
     </div>
   );
-}
-
-export default App;
+};
