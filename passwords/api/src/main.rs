@@ -113,6 +113,11 @@ async fn change_stored_password(
     Ok(Response::Ok())
 }
 
+#[get("/")]
+async fn root() -> String {
+    "Don't get hacked".to_owned()
+}
+
 // #[get("get/")]
 #[rocket::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -130,6 +135,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 add_stored_password,
                 change_stored_password,
             ],
+        )
+        .mount(
+            "/",
+            routes![
+                root
+            ]
         )
         .launch()
         .await?;
