@@ -51,7 +51,7 @@ export default function Account({ username, backend, password, reset }) {
       </div>
     </div>
     <div className="Account-info">
-      <div>{password}</div>
+      <div>{currPassword}</div>
       <button onClick={() => {setQueryView(!isQueryView);setShowDropdown(false);}}>
         {isQueryView ? 
           "Generate a new password instead" :

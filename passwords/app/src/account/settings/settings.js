@@ -35,7 +35,12 @@ export default function SettingsModal({ username, password, backend, setPassword
   });
 
   const trySave = async () => {
+    if (newPw === pw) {
+      setMsg("");
+      setErrorMsg("Must be a new password");
+    }
     if (newPw !== newPw2) {
+      setMsg("");
       setErrorMsg("Passwords must match");
       return;
     }
@@ -49,10 +54,13 @@ export default function SettingsModal({ username, password, backend, setPassword
     setIsSaving(true);
     setMsg("Updating password...");
     showLoader();
-    if (await changePassword(backend, username, pw, newPwTry)) {
+    let res = await changePassword(backend, username, pw, newPwTry);
+    console.log(res);
+    if (res) {
       // success
-      // setPw(newPwTry);
-      setMsg(<div className="green">"Password updated successfully."</div>)
+      setPw(newPwTry);
+      setPassword(newPwTry);
+      setMsg(<div className="green">"Password updated successfully."</div>);
     }
     else {
       setMsg("");
