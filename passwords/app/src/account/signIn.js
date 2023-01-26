@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import './account.css';
-import { encryptMaster } from '../crypto/encrypt';
+import { encryptMaster, checkPassword } from '../crypto/encrypt';
 import { showLoader, hideLoader } from '../loader/loader';
 
 const KeyBinds = {
@@ -9,9 +9,8 @@ const KeyBinds = {
 
 const ERROR_MSG_TIME_IN_MS = 10000;
 const TOGGLE_CREATE_ACCOUNT_DELAY_IN_MS = 300;
-const PW_MIN_LEN = 12;
 
-export default function SignIn({ user, setAccountInfo }) {
+export default function SignIn({ user, backend, setAccountInfo }) {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [errorMsg, setErrorMsgHook] = useState("");
   const setErrorMsg = (msg) => {
@@ -32,8 +31,8 @@ export default function SignIn({ user, setAccountInfo }) {
     showLoader();
     fetch(
       isCreatingAccount ? 
-      `http://localhost:8000/api/v1/post/newuser/${username}/${submittedPw}` : 
-      `http://localhost:8000/api/v1/get/verifyuser/${username}/${submittedPw}`, 
+      `${backend}/api/v1/post/newuser/${username}/${submittedPw}` : 
+      `${backend}/api/v1/get/verifyuser/${username}/${submittedPw}`, 
       { 
         method: isCreatingAccount ? 'POST' : 'GET',
         headers: { 'Content-Type': 'text/plain' }
@@ -64,7 +63,7 @@ export default function SignIn({ user, setAccountInfo }) {
 
   const onKeyPress = (e, verifyPassword=false) => {
     if (e.charCode === KeyBinds.ENTER) {
-      if (verifyPassword && !checkPassword(password)) {
+      if (verifyPassword && !checkPassword(password, errorMsg, setErrorMsgHook)) {
         return;
       }
       submit();
@@ -73,20 +72,9 @@ export default function SignIn({ user, setAccountInfo }) {
 
   const setPassword = (password) => {
     if (isCreatingAccount) {
-      checkPassword(password);
+      checkPassword(password, errorMsg, setErrorMsgHook);
     }
     setPasswordHook(password);
-  }
-
-  const checkPassword = (pw) => {
-    let ret = pw.length >= PW_MIN_LEN;
-    console.log("password:", pw, ret);
-    if (!ret) {
-      setErrorMsgHook(`Password must be at least ${PW_MIN_LEN} characters.`);
-    }
-    else if (errorMsg.startsWith("Password must be at least")) {
-      setErrorMsgHook("");
-    }
   }
 
   return (<div className="SignIn">
@@ -95,10 +83,10 @@ export default function SignIn({ user, setAccountInfo }) {
         <div>Please set up a new account:</div> :
         <div>To begin, please sign in to your account:</div>
       }
-      <div className={errorMsg.length == 0 ? 
+      <div className={errorMsg.length === 0 ? 
         "SignIn-error-invis" : 
         "SignIn-error"
-      }>{errorMsg.length == 0 ? "NoError" : errorMsg}</div>
+      }>{errorMsg.length === 0 ? "NoError" : errorMsg}</div>
       <input
         type="text"
         placeholder="username"
@@ -106,7 +94,7 @@ export default function SignIn({ user, setAccountInfo }) {
         value={username}
         onKeyPress={onKeyPress}
       />
-      <input 
+      <input
         type="password"
         placeholder="password"
         onChange={(e)=>{setPassword(e.target.value);}}

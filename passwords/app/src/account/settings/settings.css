@@ -1,0 +1,71 @@
+.Settings-modal {
+    display: flex;
+    flex-direction: column;
+}
+
+.Settings-modal .row {
+    display: flex;
+    justify-content: space-between;
+    flex-direction: row;
+    align-items: stretch;
+    padding: 10px;
+}
+
+.Settings-modal .row div {
+    display: flex;
+    align-content: flex-start;
+    padding: 8px;
+}
+
+.Settings-modal .row .info {
+    padding-top:28px;
+}
+
+.Settings-modal .buttons {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+}
+
+.Settings-modal .disabled {
+    padding: 2px;
+    background-color:rgba(200, 200, 200, 0.96);
+}
+
+.Settings-modal input {
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: white;
+}
+
+.Settings-modal input:focus {
+    outline-color: rgba(200, 200, 200, 0.96);
+}
+
+.Settings-modal .msg {
+    visibility: visible;
+    justify-items: end;
+    padding-bottom:25px
+}
+
+.Settings-modal .msg .green {
+    color: rgb(82, 165, 82);
+}
+
+.Settings-modal .msg .error {
+    color: red;
+}
+
+.ReactModal__Overlay {
+    opacity: 0;
+    transition: opacity 600ms ease-in-out;
+}
+
+.ReactModal__Overlay--after-open{
+    opacity: 1;
+}
+
+.ReactModal__Overlay--before-close{
+    opacity: 0;
+}
+

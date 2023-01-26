@@ -1,7 +1,7 @@
 import logo from './logo.svg';
 import './App.css';
 import SignIn from './account/signIn';
-import PasswordQuery from './account/passwordQuery';
+import Account from './account/account';
 import { hideLoader } from './loader/loader';
 import { useState, useEffect } from 'react';
 
@@ -10,6 +10,8 @@ export default function App() {
   let [isSignedIn, setIsSignedIn] = useState(false);
   let [username, setUsername] = useState("");
   let [password, setPassword] = useState("");
+
+  const backend = "https://passwords.maplexu.me";
 
   const setAccountInfo = (user, pw) => {
     setUsername(user);
@@ -24,21 +26,24 @@ export default function App() {
 
   return (
     <div className="App">
-      <div className="App-header">
-        <p>{isSignedIn ? `Hello, ${username}` : "Welcome to ObscurePasswordManager!"}</p>
-        <div className="App-subheader">
-          {isSignedIn ?
-            <PasswordQuery
-              username={username}
-              password={password}
-              reset={resetAccountInfo}
-            /> :
+      {isSignedIn ?
+        <Account
+          username={username}
+          password={password}
+          backend={backend}
+          reset={resetAccountInfo}
+        /> :
+        <div className="App-header">
+          <p>"Welcome to ObscurePasswordManager!"</p>
+          <div className="App-subheader">
             <SignIn 
               user={username}
+              backend={backend}
               setAccountInfo={setAccountInfo}
-            />}
+            />
+          </div>
         </div>
-      </div>
+      }
     </div>
   );
 };
