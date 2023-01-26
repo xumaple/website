@@ -1,0 +1,174 @@
+*, *:before, *:after {
+    box-sizing: border-box;
+}
+
+button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+  border-radius: 6px;
+  border: none;
+
+  background: #6E6D70;
+  box-shadow: 0px 0.5px 1px rgba(0, 0, 0, 0.1), inset 0px 0.5px 0.5px rgba(255, 255, 255, 0.5), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.12);
+  color: #DFDEDF;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+button:focus {
+  box-shadow: inset 0px 0.8px 0px -0.25px rgba(255, 255, 255, 0.2), 0px 0.5px 1px rgba(0, 0, 0, 0.1), 0px 0px 0px 3.5px rgba(58, 108, 217, 0.5);
+  outline: 0;
+}
+
+button:hover {
+  cursor: pointer;
+}
+
+.SignIn {}
+
+.SignIn-info {
+    text-align: left;
+    /* width: 200px;
+    padding: 20px; */
+}
+
+.SignIn-link {
+    color: red;
+}
+
+.SignIn-link:hover {
+    cursor: pointer;
+}
+
+.SignIn input[type=text], input[type="password"] {
+    padding: 10px;
+    margin:10px 0;
+    font-size: calc(5px + 2vmin)
+}
+
+.SignIn-error {
+    color: red;
+    font-style: italic;
+    font-size: calc(3vmin);
+    padding:5px;
+}
+
+.SignIn-error-invis {
+    color: #282c34;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.Account {
+    /* min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(10px + 3vmin);
+    color: white; */
+}
+
+.Account-dropdown {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: calc(10px+2vmin);
+    font-family: "Poppins", sans-serif;
+}
+
+.Account-dropdown .user {
+    position: relative;
+    width: 70px;
+    height: auto;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.Account-dropdown .menu {
+    position: absolute;
+    top: 120px;
+    right: -10px;
+    padding: 10px 10px;
+    background: pink;
+    width: 300px;
+    box-sizing: 0 5px 25px rgba(0, 0, 0, 0.1);
+    border-radius: 15px;
+    transition: 0.5s;
+    visibility: hidden;
+    opacity: 0;
+}
+
+.Account-dropdown .menu.active {
+    top: 80px;
+    visibility: visible;
+    opacity: 1;
+}
+
+.Account-dropdown .menu::before {
+    content: "";
+    position: absolute;
+    top: -5px;
+    right: 28px;
+    width: 20px;
+    height: 20px;
+    background: pink;
+    transform: rotate(45deg);
+}
+
+.Account-dropdown .menu h3 {
+    color: #555;
+}
+
+.Account-dropdown .menu ul li {
+    list-style: none;
+    padding: 16px 0;
+    border-top: 2px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+}
+
+.Account-dropdown .menu ul li img {
+    max-width: 20px;
+    margin-right: 10px;
+    opacity: 0.5;
+    transition: 0.5s;
+}
+  
+.Account-dropdown .menu ul li:hover img {
+    opacity: 1;
+}
+  
+.Account-dropdown .menu ul li div {
+    display: inline-block;
+    text-decoration: none;
+    color: #555;
+    font-weight: 500;
+    transition: 0.5s;
+    width:300px;
+    margin-left:-120px;
+    align-items: left;
+}
+  
+.Account-dropdown .menu ul li:hover div {
+    color: #ff5d94;
+    cursor: pointer;
+}
+
+.Account-info {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(5px + 3vmin);
+    color: white;
+}

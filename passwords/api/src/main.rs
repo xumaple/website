@@ -81,19 +81,19 @@ fn new_password() -> Result<String, Error> {
     Ok(generate_password()?)
 }
 
-#[get("/get/verifyuser/<username>/<password>")]
+#[get("/get/verifyuser?<username>&<password>")]
 async fn verify_user(username: String, password: String) -> Result<Response, Error> {
     db::verify_user(username, password).await?;
     Response::Ok()
 }
 
-#[post("/post/newuser/<username>/<password>")]
+#[post("/post/newuser?<username>&<password>")]
 async fn create_user(username: String, password: String) -> Result<Response, Error> {
     db::add_user(username, password).await?;
     Response::Ok()
 }
 
-#[post("/post/updateuser/<username>/<password>/<new_password>", 
+#[post("/post/updateuser?<username>&<password>&<new_password>",
        data = "<new_stored_passwords>")]
 async fn update_user(username: String, password: String, new_password: String, new_stored_passwords: Json<Vec<String>>) -> Result<Response, Error> {
     db::change_master_password(username,
@@ -104,12 +104,12 @@ async fn update_user(username: String, password: String, new_password: String, n
     Response::Ok()
 }
 
-#[get("/get/getpws/<username>/<password>")]
+#[get("/get/getpws?<username>&<password>")]
 async fn get_stored_passwords(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
     JsonResponse::Ok(db::get_stored_passwords(username, password).await?)
 }
 
-#[post("/post/newpw/<username>/<password>/<pwkey>/<pwval>")]
+#[post("/post/newpw/<pwkey>?<username>&<password>&<pwval>")]
 async fn add_stored_password(
     username: String,
     password: String,
@@ -120,7 +120,7 @@ async fn add_stored_password(
     Response::Ok()
 }
 
-#[post("/post/changepw/<username>/<password>/<pwkey>/<pwval>")]
+#[post("/post/changepw/<pwkey>?<username>&<password>&<pwval>")]
 async fn change_stored_password(
     username: String,
     password: String,
