@@ -7,7 +7,7 @@ pub mod encrypt;
 use db::DbError;
 use encrypt::{generate_password, CryptoError};
 use rocket::{
-    http::{Status, Header, ContentType},
+    http::{Status, Header},
     response::Responder,
     Request, Response as RocketResponse,
     serde::json::Json,
@@ -62,7 +62,6 @@ impl Response {
 #[response(status = 200, content_type = "json")]
 pub struct JsonResponse<T> {
     msg: Json<T>,
-    content_type: ContentType,
     cors: Header<'static>
 }
 impl<T> JsonResponse<T> {
@@ -71,7 +70,6 @@ impl<T> JsonResponse<T> {
         println!("Returning response Ok");
         Ok(JsonResponse {
             msg: Json(json),
-            content_type: ContentType::JSON,
             cors: Header::new("Access-Control-Allow-Origin", "*"),
         })
     }
