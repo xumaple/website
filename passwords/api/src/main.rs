@@ -7,7 +7,7 @@ pub mod encrypt;
 use db::DbError;
 use encrypt::{generate_password, CryptoError};
 use rocket::{
-    http::{Status, Header},
+    http::{Status, Header, ContentType},
     response::Responder,
     Request, Response as RocketResponse,
     serde::json::Json,
@@ -41,6 +41,7 @@ impl<'r> Responder<'r, 'static> for Error {
     }
 }
 
+
 #[derive(Responder)]
 pub struct Response {
     status: Status,
@@ -48,12 +49,31 @@ pub struct Response {
 }
 impl Response {
     #[allow(non_snake_case)]
-    pub fn Ok() -> Self {
+    pub fn Ok() -> Result<Self, Error> {
         println!("Returning response Ok");
-        Response {
+        Ok(Response {
             status: Status::Ok,
             cors: Header::new("Access-Control-Allow-Origin", "*"),
-        }
+        })
+    }
+}
+
+#[derive(Responder)]
+#[response(status = 200, content_type = "json")]
+pub struct JsonResponse<T> {
+    msg: Json<T>,
+    content_type: ContentType,
+    cors: Header<'static>
+}
+impl<T> JsonResponse<T> {
+    #[allow(non_snake_case)]
+    pub fn Ok(json: T) -> Result<Self, Error> {
+        println!("Returning response Ok");
+        Ok(JsonResponse {
+            msg: Json(json),
+            content_type: ContentType::JSON,
+            cors: Header::new("Access-Control-Allow-Origin", "*"),
+        })
     }
 }
 
@@ -66,13 +86,13 @@ fn new_password() -> Result<String, Error> {
 #[get("/get/verifyuser/<username>/<password>")]
 async fn verify_user(username: String, password: String) -> Result<Response, Error> {
     db::verify_user(username, password).await?;
-    Ok(Response::Ok())
+    Response::Ok()
 }
 
 #[post("/post/newuser/<username>/<password>")]
 async fn create_user(username: String, password: String) -> Result<Response, Error> {
     db::add_user(username, password).await?;
-    Ok(Response::Ok())
+    Response::Ok()
 }
 
 #[post("/post/updateuser/<username>/<password>/<new_password>", 
@@ -83,12 +103,12 @@ async fn update_user(username: String, password: String, new_password: String, n
         new_password,
         new_stored_passwords.into_inner()
     ).await?;
-    Ok(Response::Ok())
+    Response::Ok()
 }
 
 #[get("/get/getpws/<username>/<password>")]
-async fn get_stored_passwords(username: String, password: String) -> Result<Json<Vec<String>>, Error> {
-    Ok(Json(db::get_stored_passwords(username, password).await?))
+async fn get_stored_passwords(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
+    JsonResponse::Ok(db::get_stored_passwords(username, password).await?)
 }
 
 #[post("/post/newpw/<username>/<password>/<pwkey>/<pwval>")]
@@ -99,7 +119,7 @@ async fn add_stored_password(
     pwval: String,
 ) -> Result<Response, Error> {
     db::add_stored_password(username, password, pwkey, pwval).await?;
-    Ok(Response::Ok())
+    Response::Ok()
 }
 
 #[post("/post/changepw/<username>/<password>/<pwkey>/<pwval>")]
@@ -110,7 +130,7 @@ async fn change_stored_password(
     pwval: String,
 ) -> Result<Response, Error> {
     db::change_stored_password(username, password, pwkey, pwval).await?;
-    Ok(Response::Ok())
+    Response::Ok()
 }
 
 #[get("/")]
