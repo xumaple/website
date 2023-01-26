@@ -27,12 +27,12 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     }
     const submittedPw = encryptMaster(password);
     setPasswordHook("");
-    console.log("submitted!", username, submittedPw);
+    console.log("submitted password with user", username);
     showLoader();
     fetch(
       isCreatingAccount ? 
-      `${backend}/api/v1/post/newuser/${username}/${submittedPw}` : 
-      `${backend}/api/v1/get/verifyuser/${username}/${submittedPw}`, 
+      `${backend}/api/v1/post/newuser?username=${username}&password=${submittedPw}` :
+      `${backend}/api/v1/get/verifyuser?username=${username}&password=${submittedPw}`,
       { 
         method: isCreatingAccount ? 'POST' : 'GET',
         headers: { 'Content-Type': 'text/plain' }

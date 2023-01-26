@@ -14,7 +14,7 @@ export function decryptPw(mp, en_password) {
 
 export async function changePassword(backend, user, pw, newPw) {
     let result = await fetch(
-      `${backend}/api/v1/get/getpws/${user}/${pw}`, 
+      `${backend}/api/v1/get/getpws?username=${user}&password=${pw}`,
       { 
         method: 'GET',
         headers: { 'Content-Type': 'text/plain' }
@@ -32,7 +32,7 @@ export async function changePassword(backend, user, pw, newPw) {
       console.log('got to', updated_pws);
       return fetch(
         // `${backend}/api/v1/get/getpws/${user}/${pw}`, 
-        `${backend}/api/v1/post/updateuser/${user}/${pw}/${newPw}`, 
+        `${backend}/api/v1/post/updateuser?username=${user}&password=${pw}&new_password=${newPw}`, 
         { 
           method: 'POST',
           body: JSON.stringify(updated_pws)
