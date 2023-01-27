@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import SettingsModal from './settings/settings';
+import { QueryPassword, NewPassword } from './passwords';
 import { showLoader, hideLoader } from '../loader/loader';
 import './account.css';
 import logoIcon from "../assets/icons/log-out.png";
@@ -52,10 +53,21 @@ export default function Account({ username, backend, password, reset }) {
     </div>
     <div className="Account-info">
       <div>{currPassword}</div>
-      <button onClick={() => {setQueryView(!isQueryView);setShowDropdown(false);}}>
+      {isQueryView?<QueryPassword
+        backend={backend}
+        user={username}
+        password={currPassword}
+        setErrorMsg={()=>{}}
+      />:<NewPassword
+        backend={backend}
+        user={username}
+        password={currPassword}
+        setErrorMsg={()=>{}}
+      />}
+      <button className="toggle" onClick={() => {setQueryView(!isQueryView);setShowDropdown(false);}}>
         {isQueryView ? 
           "Generate a new password instead" :
-          "Query an existing password instead"}
+          "Query an existing password"}
       </button>
     </div>
     <SettingsModal

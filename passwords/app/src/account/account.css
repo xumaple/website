@@ -172,3 +172,19 @@ button:hover {
     font-size: calc(5px + 3vmin);
     color: white;
 }
+
+.Account-info .ac {
+    color:white;
+    /* color:rgba(185, 168, 168, 0.802); */
+    /* background-color: white; */
+}
+
+.Account-info .toggle {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+}
+
+.MuiAutocomplete-root {
+    color: white;
+}

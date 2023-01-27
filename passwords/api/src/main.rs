@@ -104,6 +104,16 @@ async fn update_user(username: String, password: String, new_password: String, n
     Response::Ok()
 }
 
+#[get("/get/getkeys?<username>&<password>")]
+async fn get_stored_keys(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
+    JsonResponse::Ok(db::get_stored_keys(username, password).await?)
+}
+
+#[get("/get/getpw/<pwkey>?<username>&<password>")]
+async fn get_stored_password(username: String, password: String, pwkey: String) -> Result<JsonResponse<String>, Error> {
+    JsonResponse::Ok(db::get_stored_password(username, password, pwkey).await?)
+}
+
 #[get("/get/getpws?<username>&<password>")]
 async fn get_stored_passwords(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
     JsonResponse::Ok(db::get_stored_passwords(username, password).await?)
@@ -149,6 +159,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 create_user,
                 verify_user,
                 update_user,
+                get_stored_keys,
+                get_stored_password,
                 get_stored_passwords,
                 add_stored_password,
                 change_stored_password,

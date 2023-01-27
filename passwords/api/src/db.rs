@@ -42,7 +42,7 @@ impl Into<Bson> for MasterKey {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct User {
     #[serde(rename = "_id")]
-    en_user: ObjectId,
+    en_user: OID,
     master_key: MasterKey,
     stored_passwords: Vec<PasswordKV>,
 }
@@ -79,11 +79,19 @@ pub async fn connect() -> Result<(), DbError> {
     Ok(())
 }
 
+async fn authenticate_user(username: &String, password: String) -> Result<(&Collection<User>, User, OID), DbError> {
+    let db = DB.get().unwrap();
+    let en_user = user2oid(username);
+    let user = find_user(username, en_user).await?;
+    verify_master_key(password, &user.master_key)?;
+    Ok((db, user, en_user))
+}
+
 pub async fn add_user(username: String, password: String) -> Result<(), DbError> {
     let db = DB.get().unwrap();
 
     let en_user = user2oid(&username);
-    if find_user(username, en_user).await.is_ok() {
+    if find_user(&username, en_user).await.is_ok() {
         return Err(DbError::GenericError {
             error_msg: "Cannot add user because username already exists".to_owned(),
         });
@@ -105,13 +113,11 @@ pub async fn add_user(username: String, password: String) -> Result<(), DbError>
 }
 
 pub async fn verify_user(username: String, password: String) -> Result<(), DbError> {
-    let en_user = user2oid(&username);
-    let user = find_user(username, en_user).await?;
-    verify_master_key(password, &user.master_key)?;
+    let _ = authenticate_user(&username, password).await?;
     Ok(())
 }
 
-pub async fn find_user(username: String, en_user: ObjectId) -> Result<User, DbError> {
+pub async fn find_user(username: &String, en_user: OID) -> Result<User, DbError> {
     match DB
         .get()
         .unwrap()
@@ -132,11 +138,20 @@ pub async fn find_user(username: String, en_user: ObjectId) -> Result<User, DbEr
     }
 }
 
-pub async fn get_stored_passwords(username: String, password: String) -> Result<Vec<String>, DbError> {
-    let en_user = user2oid(&username);
-    let user = find_user(username, en_user).await?;
-    verify_master_key(password, &user.master_key)?;
+pub async fn get_stored_keys(username: String, password: String) -> Result<Vec<String>, DbError> {
+    let (_, user, _) = authenticate_user(&username, password).await?;
+    Ok(user.stored_passwords.into_iter().map(|kv| kv.key).collect())
+}
 
+pub async fn get_stored_password(username: String, password: String, pwkey: String) -> Result<String, DbError> {
+    let (_, user, _) = authenticate_user(&username, password).await?;
+    Ok(user.stored_passwords.iter().find(|kv| pwkey==kv.key).ok_or_else(|| DbError::GenericError {
+        error_msg: format!("Unable to find key {}", pwkey),
+    })?.en_password.clone())
+}
+
+pub async fn get_stored_passwords(username: String, password: String) -> Result<Vec<String>, DbError> {
+    let (_, user, _) = authenticate_user(&username, password).await?;
     Ok(user.stored_passwords.into_iter().map(|kv| kv.en_password).collect())
 }
 
@@ -146,10 +161,7 @@ pub async fn add_stored_password(
     pwkey: String,
     pwval: String,
 ) -> Result<(), DbError> {
-    let db = DB.get().unwrap();
-    let en_user = user2oid(&username);
-    let user = find_user(username, en_user).await?;
-    verify_master_key(password, &user.master_key)?;
+    let (db, user, en_user) = authenticate_user(&username, password).await?;
 
     if user
         .stored_passwords
@@ -186,10 +198,7 @@ pub async fn change_stored_password(
     pwkey: String,
     pwval: String,
 ) -> Result<(), DbError> {
-    let db = DB.get().unwrap();
-    let en_user = user2oid(&username);
-    let user = find_user(username, en_user).await?;
-    verify_master_key(password, &user.master_key)?;
+    let (db, user, en_user) = authenticate_user(&username, password).await?;
 
     user.stored_passwords
         .into_iter()
@@ -220,10 +229,7 @@ pub async fn change_master_password(
     new_password: String,
     updated_stored_passwords: Vec<String>,
 ) -> Result<(), DbError> {
-    let db = DB.get().unwrap();
-    let en_user = user2oid(&username);
-    let user = find_user(username, en_user).await?;
-    verify_master_key(password, &user.master_key)?;
+    let (db, user, en_user) = authenticate_user(&username, password).await?;
 
     if user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
