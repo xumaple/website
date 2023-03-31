@@ -25,7 +25,7 @@ pub enum Error {
 impl<'r> Responder<'r, 'static> for Error {
     fn respond_to(self, _: &'r Request<'_>) -> Result<RocketResponse<'static>, Status> {
         println!(
-            "Preparing error response. Recorded error: {}\n{:?}",
+            "Preparing error response. Recorded error: {}\n{:#?}",
             self.to_string(),
             self,
         );
@@ -77,8 +77,8 @@ impl<T> JsonResponse<T> {
 
 
 #[get("/get/newpw")]
-fn new_password() -> Result<String, Error> {
-    Ok(generate_password()?)
+fn new_password() -> Result<JsonResponse<String>, Error> {
+    JsonResponse::Ok(generate_password()?)
 }
 
 #[get("/get/verifyuser?<username>&<password>")]

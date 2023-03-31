@@ -4,6 +4,9 @@ import SignIn from './account/signIn';
 import Account from './account/account';
 import { hideLoader } from './loader/loader';
 import { useState, useEffect } from 'react';
+import { ThemeProvider } from '@mui/material/styles';
+import Theme from './theme';
+import CssBaseline from '@mui/material/CssBaseline';
 
 export default function App() {
   useEffect(hideLoader);
@@ -27,24 +30,27 @@ export default function App() {
 
   return (
     <div className="App">
-      {isSignedIn ?
-        <Account
-          username={username}
-          password={password}
-          backend={backend}
-          reset={resetAccountInfo}
-        /> :
-        <div className="App-header">
-          <p>"Welcome to ObscurePasswordManager!"</p>
-          <div className="App-subheader">
-            <SignIn 
-              user={username}
-              backend={backend}
-              setAccountInfo={setAccountInfo}
-            />
+      <ThemeProvider theme={Theme}>
+        <CssBaseline />
+        {isSignedIn ?
+          <Account
+            username={username}
+            password={password}
+            backend={backend}
+            reset={resetAccountInfo}
+          /> :
+          <div className="App-header">
+            <p>"Welcome to ObscurePasswordManager!"</p>
+            <div className="App-subheader">
+              <SignIn 
+                user={username}
+                backend={backend}
+                setAccountInfo={setAccountInfo}
+              />
+            </div>
           </div>
-        </div>
-      }
+        }
+      </ThemeProvider>
     </div>
   );
 };

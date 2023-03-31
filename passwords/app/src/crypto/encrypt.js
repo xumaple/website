@@ -1,4 +1,4 @@
-const PW_MIN_LEN = 0;
+const PW_MIN_LEN = 1;
 
 export function encryptMaster(password) {
     return `${password}`;
