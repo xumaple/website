@@ -1,31 +1,33 @@
-*, *:before, *:after {
+*,
+*:before,
+*:after {
     box-sizing: border-box;
 }
 
 button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 14px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
-  border-radius: 6px;
-  border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+    border-radius: 6px;
+    border: none;
 
-  background: #6E6D70;
-  box-shadow: 0px 0.5px 1px rgba(0, 0, 0, 0.1), inset 0px 0.5px 0.5px rgba(255, 255, 255, 0.5), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.12);
-  color: #DFDEDF;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
+    background: #283593;
+    box-shadow: 0px 0.5px 1px rgba(0, 0, 0, 0.1), inset 0px 0.5px 0.5px rgba(255, 255, 255, 0.5), 0px 0px 0px 0.5px rgba(0, 0, 0, 0.12);
+    color: #DFDEDF;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
 }
 
 button:focus {
-  box-shadow: inset 0px 0.8px 0px -0.25px rgba(255, 255, 255, 0.2), 0px 0.5px 1px rgba(0, 0, 0, 0.1), 0px 0px 0px 3.5px rgba(58, 108, 217, 0.5);
-  outline: 0;
+    box-shadow: inset 0px 0.8px 0px -0.25px rgba(255, 255, 255, 0.2), 0px 0.5px 1px rgba(0, 0, 0, 0.1), 0px 0px 0px 3.5px rgba(58, 108, 217, 0.5);
+    outline: 0;
 }
 
 button:hover {
-  cursor: pointer;
+    cursor: pointer;
 }
 
 .SignIn {}
@@ -37,28 +39,28 @@ button:hover {
 }
 
 .SignIn-link {
-    color: red;
+    /* color: red; */
 }
 
 .SignIn-link:hover {
     cursor: pointer;
 }
 
-.SignIn input[type=text], input[type="password"] {
+/* .SignIn input[type=text], input[type="password"] {
     padding: 10px;
     margin:10px 0;
     font-size: calc(5px + 2vmin)
-}
+} */
 
 .SignIn-error {
-    color: red;
+    /* color: red; */
     font-style: italic;
     font-size: calc(3vmin);
-    padding:5px;
+    padding: 5px;
 }
 
 .SignIn-error-invis {
-    color: #282c34;
+    /* color: #282c34; */
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
@@ -142,22 +144,22 @@ button:hover {
     opacity: 0.5;
     transition: 0.5s;
 }
-  
+
 .Account-dropdown .menu ul li:hover img {
     opacity: 1;
 }
-  
+
 .Account-dropdown .menu ul li div {
     display: inline-block;
     text-decoration: none;
     color: #555;
     font-weight: 500;
     transition: 0.5s;
-    width:300px;
-    margin-left:-120px;
+    width: 300px;
+    margin-left: -120px;
     align-items: left;
 }
-  
+
 .Account-dropdown .menu ul li:hover div {
     color: #ff5d94;
     cursor: pointer;
@@ -171,4 +173,59 @@ button:hover {
     justify-content: center;
     font-size: calc(5px + 3vmin);
     color: white;
+}
+
+.Account-info .ac {
+    color: white;
+    /* color:rgba(185, 168, 168, 0.802); */
+    /* background-color: white; */
+}
+
+.Account-info .toggle {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+}
+
+.MuiAutocomplete-root {
+    color: white;
+}
+
+.copy {
+    text-align: left;
+}
+
+.copy-prompt {
+    cursor: pointer;
+    text-align: right;
+}
+
+.copy-prompt-press {
+    color: green;
+}
+
+.copy-prompt-shown {
+    opacity: 1;
+    transition: all 2s linear;
+}
+
+.copy-prompt-hidden {
+    opacity: 0;
+    cursor: default;
+}
+
+.copy-alert {
+    color: greenyellow;
+    text-align: right;
+}
+
+.copy-alert-shown {
+    opacity: 1;
+    transition: all 100ms linear;
+}
+
+.copy-alert-hidden {
+    opacity: 0;
+    transition: all 300ms linear;
+    cursor: default;
 }

@@ -25,7 +25,7 @@ pub enum Error {
 impl<'r> Responder<'r, 'static> for Error {
     fn respond_to(self, _: &'r Request<'_>) -> Result<RocketResponse<'static>, Status> {
         println!(
-            "Preparing error response. Recorded error: {}\n{:?}",
+            "Preparing error response. Recorded error: {}\n{:#?}",
             self.to_string(),
             self,
         );
@@ -77,8 +77,8 @@ impl<T> JsonResponse<T> {
 
 
 #[get("/get/newpw")]
-fn new_password() -> Result<String, Error> {
-    Ok(generate_password()?)
+fn new_password() -> Result<JsonResponse<String>, Error> {
+    JsonResponse::Ok(generate_password()?)
 }
 
 #[get("/get/verifyuser?<username>&<password>")]
@@ -102,6 +102,16 @@ async fn update_user(username: String, password: String, new_password: String, n
         new_stored_passwords.into_inner()
     ).await?;
     Response::Ok()
+}
+
+#[get("/get/getkeys?<username>&<password>")]
+async fn get_stored_keys(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
+    JsonResponse::Ok(db::get_stored_keys(username, password).await?)
+}
+
+#[get("/get/getpw/<pwkey>?<username>&<password>")]
+async fn get_stored_password(username: String, password: String, pwkey: String) -> Result<JsonResponse<String>, Error> {
+    JsonResponse::Ok(db::get_stored_password(username, password, pwkey).await?)
 }
 
 #[get("/get/getpws?<username>&<password>")]
@@ -149,6 +159,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 create_user,
                 verify_user,
                 update_user,
+                get_stored_keys,
+                get_stored_password,
                 get_stored_passwords,
                 add_stored_password,
                 change_stored_password,
