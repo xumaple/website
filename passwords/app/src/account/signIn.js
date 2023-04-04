@@ -49,7 +49,11 @@ export default function SignIn({ user, backend, setAccountInfo }) {
         setAccountInfo(username, submittedPw);
       })
       .catch((e) => {
-        setErrorMsg("Unable to log in, please try again.");
+        setErrorMsg(
+          isCreatingAccount
+            ? " Unable to create account, please try a different usename."
+            : "Unable to log in, please try again."
+        );
         console.error(e);
       })
       .finally(hideLoader);
@@ -82,8 +86,6 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     }
     setPasswordHook(password);
   };
-
-  console.log(theme);
 
   return (
     <div className="SignIn">

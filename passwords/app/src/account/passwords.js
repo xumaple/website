@@ -11,12 +11,9 @@ import "./account.css";
 
 export function QueryPassword({ backend, user, password, keys, setErrorMsg }) {
   let [kvs, setKvs] = useState(new Object());
-  let [acValue, setAcValue] = useState("");
-  // let [inputValue, setInputValue] = useState("");
   let [retrieved, setRetrieved] = useState("");
 
   const onAcChange = (e, newKey, reason) => {
-    setAcValue(newKey);
     if (newKey !== null) {
       if (!(newKey in kvs)) {
         fetch(
@@ -77,6 +74,7 @@ export function QueryPassword({ backend, user, password, keys, setErrorMsg }) {
         renderInput={(s) => (
           <TextField
             {...s}
+            autoFocus={true}
             label={keys === undefined ? "Loading..." : "Select a password key"}
           />
         )}
@@ -107,7 +105,7 @@ export function NewPassword({
   setErrorMsg,
 }) {
   const [key, setKey] = useState("");
-  const [copyText, setCopyText] = useState(null);
+  const [copyText, setCopyText] = useState("");
 
   const onKeyPress = (e) => {
     if (e.charCode === KeyBinds.ENTER) {
@@ -194,7 +192,7 @@ function CopyText({ text }) {
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
-    if (text !== null) {
+    if (text !== "") {
       copy(text);
       if (showPrompt === false) {
         setTimeout(() => {
