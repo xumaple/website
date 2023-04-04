@@ -85,11 +85,8 @@ export function QueryPassword({ backend, user, password, keys, setErrorMsg }) {
         ""
       ) : (
         <div>
-          <div className="copy">
-            Retrieved password for key {retrieved} and{" "}
-            <span className="copy-alert">copied</span> to your clipboard!{" "}
-          </div>
-          <CopyText text={kvs[retrieved]} />
+          <div className="copy">Retrieved password for key {retrieved}!</div>
+          <CopyText text={kvs[retrieved]} copyOnLoad={false} />
         </div>
       )}
     </div>
@@ -181,19 +178,25 @@ export function NewPassword({
             clipboard!{" "}
           </div>
         )}
-        <CopyText text={copyText} />
+        <CopyText text={copyText} copyOnLoad={true} />
       </div>
     </div>
   );
 }
 
-function CopyText({ text }) {
+function CopyText({ text, copyOnLoad }) {
+  const [copied, setCopied] = useState(copyOnLoad);
+  // If copyOnLoad==true, then showPrompt starts out false and then
+  // useEffect() will change to true. Else, showPrompt starts out
+  // true to give user an opportunity to copy.
+  const [showPrompt, setShowPrompt] = useState(!copyOnLoad);
   const [showAlert, setShowAlert] = useState(false);
-  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
-    if (text !== "") {
+    if (copyOnLoad && text !== "") {
+      console.log("copying");
       copy(text);
+      setCopied(true);
       if (showPrompt === false) {
         setTimeout(() => {
           setShowPrompt(true);
@@ -223,6 +226,7 @@ function CopyText({ text }) {
         text={text}
         onCopy={() => {
           setShowAlert(true);
+          setCopied(true);
         }}
       >
         <div
@@ -233,7 +237,8 @@ function CopyText({ text }) {
             setShowAlert(false);
           }}
         >
-          Click <span className="copy-prompt-press">here</span> to copy again.
+          Click <span className="copy-prompt-press">here</span> to copy
+          {copied ? " again" : ""}.
         </div>
       </CopyToClipboard>
     </div>
