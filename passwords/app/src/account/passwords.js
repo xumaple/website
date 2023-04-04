@@ -226,6 +226,7 @@ function CopyText({ text, copyOnLoad }) {
         text={text}
         onCopy={() => {
           setShowAlert(true);
+          setCopied(true);
         }}
       >
         <div
