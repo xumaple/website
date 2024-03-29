@@ -10,12 +10,20 @@ import { useTheme } from "@mui/material/styles";
 
 const TOGGLE_VIEW_DELAY_IN_MS = 300;
 
-export default function Account({ username, backend, password, reset }) {
+export default function Account({
+  username,
+  en_user,
+  backend,
+  password,
+  en_pw,
+  reset,
+}) {
   // const theme = useTheme();
   let [isQueryView, setIsQueryView] = useState(true); // true == queryView; false == newPasswordView
   let [showDropdown, setShowDropdown] = useState(false);
   let [showSettings, setShowSettings] = useState(false);
   let [currPassword, setCurrPassword] = useState(password);
+  let [currEnPw, setCurrEnPw] = useState(en_pw);
 
   let [keys, setKeys] = useState(undefined);
   const addNewKey = (newKey) => {
@@ -29,7 +37,7 @@ export default function Account({ username, backend, password, reset }) {
     if (keys === undefined) {
       showLoader();
       fetch(
-        `${backend}/api/v1/get/getkeys?username=${username}&password=${currPassword}`,
+        `${backend}/api/v1/get/getkeys?username=${en_user}&password=${currEnPw}`,
         {
           method: "GET",
         }
@@ -109,16 +117,18 @@ export default function Account({ username, backend, password, reset }) {
         {isQueryView ? (
           <QueryPassword
             backend={backend}
-            user={username}
+            en_user={en_user}
             password={currPassword}
+            en_pw={currEnPw}
             keys={keys}
             setErrorMsg={setErrorMsg}
           />
         ) : (
           <NewPassword
             backend={backend}
-            user={username}
+            en_user={en_user}
             password={currPassword}
+            en_pw={currEnPw}
             keys={keys}
             addNewKey={addNewKey}
             setErrorMsg={setErrorMsg}
@@ -142,7 +152,8 @@ export default function Account({ username, backend, password, reset }) {
       </div>
       <SettingsModal
         username={username}
-        password={currPassword}
+        en_user={en_user}
+        en_pw={currEnPw}
         backend={backend}
         setPassword={setCurrPassword}
         show={showSettings}

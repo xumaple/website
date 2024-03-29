@@ -28,14 +28,21 @@ export default function SignIn({ user, backend, setAccountInfo }) {
       setErrorMsg("Please enter a valid username and password.");
       return;
     }
+    if (
+      isCreatingAccount &&
+      !checkPassword(password, errorMsg, setErrorMsgHook)
+    ) {
+      return;
+    }
     const submittedPw = encryptMaster(password);
+    const submittedUser = encryptMaster(username);
     setPasswordHook("");
     console.log("submitted password with user", username);
     showLoader();
     fetch(
       isCreatingAccount
-        ? `${backend}/api/v1/post/newuser?username=${username}&password=${submittedPw}`
-        : `${backend}/api/v1/get/verifyuser?username=${username}&password=${submittedPw}`,
+        ? `${backend}/api/v1/post/newuser?username=${submittedUser}&password=${submittedPw}`
+        : `${backend}/api/v1/get/verifyuser?username=${submittedUser}&password=${submittedPw}`,
       {
         method: isCreatingAccount ? "POST" : "GET",
         headers: { "Content-Type": "text/plain" },
@@ -46,7 +53,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           console.log(response);
           throw new Error("Unable to log in.");
         }
-        setAccountInfo(username, submittedPw);
+        setAccountInfo(username, submittedUser, password, submittedPw);
       })
       .catch((e) => {
         setErrorMsg(
@@ -115,13 +122,9 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           }}
           value={username}
           autoFocus={true}
-          onKeyPress={
-            isCreatingAccount
-              ? (e) => {
-                  onKeyPress(e, true);
-                }
-              : onKeyPress
-          }
+          onKeyPress={(e) => {
+            onKeyPress(e, isCreatingAccount);
+          }}
         />
         <TextField
           type="password"
@@ -130,13 +133,9 @@ export default function SignIn({ user, backend, setAccountInfo }) {
             setPassword(e.target.value);
           }}
           value={password}
-          onKeyPress={
-            isCreatingAccount
-              ? (e) => {
-                  onKeyPress(e, true);
-                }
-              : onKeyPress
-          }
+          onKeyPress={(e) => {
+            onKeyPress(e, isCreatingAccount);
+          }}
         />
       </div>
       <button type="button" onClick={submit}>
