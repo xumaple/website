@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import Modal from "react-modal";
 import { showLoader, hideLoader } from "../../loader/loader";
-import { changePassword, checkPassword } from "../../crypto/encrypt";
+import {
+  encryptMaster,
+  changePassword,
+  checkPassword,
+} from "../../crypto/encrypt";
 import "./settings.css";
 
 const customStyles = {
@@ -23,13 +27,14 @@ const customStyles = {
 
 export default function SettingsModal({
   username,
-  password,
+  en_user,
+  en_pw,
   backend,
   setPassword,
   show,
   stopShowing,
 }) {
-  const [pw, setPw] = useState(password);
+  const [pw, setPw] = useState(en_pw);
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -41,10 +46,6 @@ export default function SettingsModal({
   });
 
   const trySave = async () => {
-    if (newPw === pw) {
-      setMsg("");
-      setErrorMsg("Must be a new password");
-    }
     if (newPw !== newPw2) {
       setMsg("");
       setErrorMsg("Passwords must match");
@@ -53,19 +54,24 @@ export default function SettingsModal({
     if (!checkPassword(newPw, errorMsg, setErrorMsg)) {
       return;
     }
-    const newPwTry = newPw;
+    const newPwTry = encryptMaster(newPw);
+    if (newPwTry === pw) {
+      setMsg("");
+      setErrorMsg("Must be a new password");
+      return;
+    }
     setNewPw("");
     setNewPw2("");
     setErrorMsg("");
     setIsSaving(true);
     setMsg("Updating password...");
     showLoader();
-    let res = await changePassword(backend, username, pw, newPwTry);
+    let res = await changePassword(backend, en_user, pw, newPwTry);
     if (res) {
       // success
       setPw(newPwTry);
       setPassword(newPwTry);
-      setMsg(<div className="green">"Password updated successfully."</div>);
+      setMsg(<div className="green">Password updated successfully.</div>);
     } else {
       setMsg("");
       setErrorMsg("Unable to update password.");

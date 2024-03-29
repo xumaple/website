@@ -87,12 +87,14 @@ async fn verify_user(username: String, password: String) -> Result<Response, Err
     Response::Ok()
 }
 
+// TODO: add a lock for creating new users
 #[post("/post/newuser?<username>&<password>")]
 async fn create_user(username: String, password: String) -> Result<Response, Error> {
     db::add_user(username, password).await?;
     Response::Ok()
 }
 
+// TODO: add locks per user for all post requests
 #[post("/post/updateuser?<username>&<password>&<new_password>",
        data = "<new_stored_passwords>")]
 async fn update_user(username: String, password: String, new_password: String, new_stored_passwords: Json<Vec<String>>) -> Result<Response, Error> {

@@ -9,8 +9,15 @@ import copy from "copy-to-clipboard";
 import { KeyBinds } from "../util";
 import "./account.css";
 
-export function QueryPassword({ backend, user, password, keys, setErrorMsg }) {
-  let [kvs, setKvs] = useState(new Object());
+export function QueryPassword({
+  backend,
+  en_user,
+  password,
+  en_pw,
+  keys,
+  setErrorMsg,
+}) {
+  let [kvs, setKvs] = useState({});
   let [retrieved, setRetrieved] = useState("");
 
   const onAcChange = (e, newKey, reason) => {
@@ -19,9 +26,9 @@ export function QueryPassword({ backend, user, password, keys, setErrorMsg }) {
         fetch(
           `${backend}/api/v1/get/getpw/${encodeURIComponent(
             newKey
-          )}?username=${encodeURIComponent(user)}&password=${encodeURIComponent(
-            password
-          )}`,
+          )}?username=${encodeURIComponent(
+            en_user
+          )}&password=${encodeURIComponent(en_pw)}`,
           {
             method: "GET",
           }
@@ -95,8 +102,9 @@ export function QueryPassword({ backend, user, password, keys, setErrorMsg }) {
 
 export function NewPassword({
   backend,
-  user,
+  en_user,
   password,
+  en_pw,
   keys,
   addNewKey,
   setErrorMsg,
@@ -132,9 +140,11 @@ export function NewPassword({
         fetch(
           `${backend}/api/v1/post/newpw/${encodeURIComponent(
             key
-          )}?username=${encodeURIComponent(user)}&password=${encodeURIComponent(
-            password
-          )}&pwval=${encodeURIComponent(encryptPw(password, pwval))}`,
+          )}?username=${encodeURIComponent(
+            en_user
+          )}&password=${encodeURIComponent(en_pw)}&pwval=${encodeURIComponent(
+            encryptPw(password, pwval)
+          )}`,
           {
             method: "POST",
           }

@@ -12,14 +12,18 @@ export default function App() {
   useEffect(hideLoader);
   let [isSignedIn, setIsSignedIn] = useState(false);
   let [username, setUsername] = useState("");
+  let [en_user, setEnUser] = useState("");
   let [password, setPassword] = useState("");
+  let [en_pw, setEnPw] = useState("");
 
   const backend = "https://passwords.maplexu.me";
   // const backend = "http://localhost:8000";
 
-  const setAccountInfo = (user, pw) => {
+  const setAccountInfo = (user, en_user, pw, en_pw) => {
     setUsername(user);
+    setEnUser(en_user);
     setPassword(pw);
+    setEnPw(en_pw);
     setIsSignedIn(true);
   };
 
@@ -35,7 +39,9 @@ export default function App() {
         {isSignedIn ? (
           <Account
             username={username}
+            en_user={en_user}
             password={password}
+            en_pw={en_pw}
             backend={backend}
             reset={resetAccountInfo}
           />
