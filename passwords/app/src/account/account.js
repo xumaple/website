@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import SettingsModal from "./settings/settings";
 import { QueryPassword, NewPassword } from "./passwords";
+import AddPasswordsModal from "./addpasswords";
 import { showLoader, hideLoader } from "../loader/loader";
 import "./account.css";
 import userIcon from "../assets/icons/user-inverted.png";
@@ -15,6 +16,7 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
+import AddIcon from "@mui/icons-material/AddCircle";
 
 const TOGGLE_VIEW_DELAY_IN_MS = 300;
 
@@ -28,8 +30,8 @@ export default function Account({
 }) {
   // const theme = useTheme();
   let [isQueryView, setIsQueryView] = useState(true); // true == queryView; false == newPasswordView
-  let [showDropdown, setShowDropdown] = useState(false);
   let [showSettings, setShowSettings] = useState(false);
+  let [showAddPasswords, setShowAddPasswords] = useState(false);
   let [currPassword, setCurrPassword] = useState(password);
   let [currEnPw, setCurrEnPw] = useState(en_pw);
   const [open, setOpen] = useState(false);
@@ -108,8 +110,19 @@ export default function Account({
         <ListItem key={Account} disablePadding>
           <ListItemButton
             onClick={() => {
+              setShowAddPasswords(true);
+            }}
+          >
+            <ListItemIcon>
+              <AddIcon />
+            </ListItemIcon>
+            <ListItemText primary={"Manually Add Passwords"} />
+          </ListItemButton>
+        </ListItem>
+        <ListItem key={Account} disablePadding>
+          <ListItemButton
+            onClick={() => {
               setShowSettings(true);
-              setShowDropdown(false);
             }}
           >
             <ListItemIcon>
@@ -142,46 +155,6 @@ export default function Account({
         <Drawer open={open} onClose={() => toggleDrawer(false)}>
           {DrawerList}
         </Drawer>
-        {/* <div className={showDropdown ? "menu active" : "menu"}>
-          <span style={{ fontSize: "calc(8px + 2vmin)" }}>
-            {username}
-            <br />
-          </span>
-          <ul>
-            <li>
-            <img src="../assets/icons/user.png" /><a href="#">My profile</a>
-          </li>
-          <li>
-            <img src="../assets/icons/edit.png" /><a href="#">Edit profile</a>
-          </li>
-          <li>
-            <img src="../assets/icons/envelope.png" /><a href="#">Inbox</a>
-          </li>
-        <li><img src="../assets/icons/question.png" /><a href="#">Help</a></li>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                backgroundColor: "blue"
-              }}
-            >
-              <AddIcon></AddIcon>
-              <div
-                onClick={() => {
-                  setShowSettings(true);
-                  setShowDropdown(false);
-                }}
-                style={{ fontSize: "24px" }}
-              >
-                Settings
-              </div>
-            </div>
-            <li>
-              <img src={logoIcon} alt="" />
-              <div onClick={reset}>Logout</div>
-            </li>
-          </ul>
-        </div> */}
       </div>
       <div className="Account-info">
         {isQueryView ? (
@@ -211,7 +184,6 @@ export default function Account({
             variant="extended"
             onClick={() => {
               setQueryView(!isQueryView);
-              setShowDropdown(false);
             }}
             sx={{
               position: "absolute",
@@ -238,6 +210,13 @@ export default function Account({
         setEnPassword={setCurrEnPw}
         show={showSettings}
         stopShowing={() => setShowSettings(false)}
+      />
+      <AddPasswordsModal
+        en_user={en_user}
+        en_pw={currEnPw}
+        backend={backend}
+        show={showAddPasswords}
+        stopShowing={() => setShowAddPasswords(false)}
       />
     </div>
   );
