@@ -4,6 +4,10 @@ import { encryptPw, decryptPw } from "../crypto/encrypt";
 import Autocomplete from "@mui/material/Autocomplete";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
+import Alert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
+import AlertTitle from "@mui/material/AlertTitle";
+import IconButton from "@mui/material/IconButton";
 import CopyToClipboard from "react-copy-to-clipboard";
 import copy from "copy-to-clipboard";
 import { KeyBinds } from "../util";
@@ -15,10 +19,11 @@ export function QueryPassword({
   password,
   en_pw,
   keys,
-  setErrorMsg,
+  setErrorMsg
 }) {
   let [kvs, setKvs] = useState({});
   let [retrieved, setRetrieved] = useState("");
+  const [open, setOpen] = useState(false);
 
   const onAcChange = (e, newKey, reason) => {
     if (newKey !== null) {
@@ -30,7 +35,7 @@ export function QueryPassword({
             en_user
           )}&password=${encodeURIComponent(en_pw)}`,
           {
-            method: "GET",
+            method: "GET"
           }
         )
           .then((response) => {
@@ -61,14 +66,55 @@ export function QueryPassword({
     }
   };
 
+  const handleClick = () => {
+    setOpen(true);
+  };
+
+  const handleClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+
+    setOpen(false);
+  };
+
+  const action = (
+    <>
+      <Button
+        sx={{
+          color: "white",
+          backgroundColor: "#3f50b5",
+          ":hover": {
+            backgroundColor: "#282c34"
+          },
+          borderRadius: "4px"
+        }}
+        color="primary"
+        variant="contained"
+        size="small"
+        onClick={handleClose}
+      >
+        Close
+      </Button>
+    </>
+  );
+
   return (
-    <div>
-      <div>Select a password to retrieve:</div>
+    <div className="Password-container">
+      <div className="Password-header">Select a password to retrieve:</div>
       <Autocomplete
-        className="ac"
         disablePortal
         id="my-id"
-        sx={{ width: 300, color: "primary.light" }}
+        sx={{
+          width: "100%",
+          color: "blue",
+          "& .MuiSvgIcon-root": {
+            color: "black"
+          },
+          "& .MuiIconButton-root ": {
+            marginLeft: "6px"
+          }
+        }}
         options={keys}
         autoComplete={true}
         autoSelect={true}
@@ -83,6 +129,24 @@ export function QueryPassword({
             {...s}
             autoFocus={true}
             label={keys === undefined ? "Loading..." : "Select a password key"}
+            sx={{
+              marginTop: "12px",
+              marginBottom: "24px",
+              fieldset: { borderColor: "black" },
+              input: { color: "black" },
+              label: { color: "black" },
+              "& .MuiOutlinedInput-root": {
+                "&.Mui-focused fieldset": {
+                  borderColor: "#3f50b5"
+                }
+              },
+              "&:hover fieldset": {
+                borderColor: "#3f50b5 !important"
+              }
+            }}
+            InputLabelProps={{
+              sx: { "&.Mui-focused": { color: "#3f50b5" } }
+            }}
           />
         )}
         onChange={onAcChange}
@@ -91,11 +155,37 @@ export function QueryPassword({
       {retrieved === "" ? (
         ""
       ) : (
-        <div>
-          <div className="copy">Retrieved password for key {retrieved}!</div>
-          <CopyText text={kvs[retrieved]} copyOnLoad={false} />
+        <div style={{ width: "100%" }}>
+          <CopyToClipboard
+            onCopy={() => {
+              handleClick();
+            }}
+            text={kvs[retrieved]}
+          >
+            <Alert
+              sx={{
+                textAlign: "left",
+                ":hover": {
+                  backgroundColor: "black"
+                }
+              }}
+              severity="info"
+            >
+              <AlertTitle> Retrieved password for {retrieved}!</AlertTitle>
+              Click here to copy.
+            </Alert>
+          </CopyToClipboard>
+          {/* <CopyText text={kvs[retrieved]} copyOnLoad={false} /> */}
         </div>
       )}
+      <Snackbar
+        open={open}
+        autoHideDuration={6000}
+        onClose={handleClose}
+        message="Password Copied!"
+        action={action}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
     </div>
   );
 }
@@ -107,15 +197,28 @@ export function NewPassword({
   en_pw,
   keys,
   addNewKey,
-  setErrorMsg,
+  setErrorMsg
 }) {
   const [key, setKey] = useState("");
   const [copyText, setCopyText] = useState("");
+  const [open, setOpen] = useState(false);
 
   const onKeyPress = (e) => {
     if (e.charCode === KeyBinds.ENTER) {
       submit();
     }
+  };
+
+  const handleClick = () => {
+    setOpen(true);
+  };
+
+  const handleClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+
+    setOpen(false);
   };
 
   const submit = () => {
@@ -127,7 +230,7 @@ export function NewPassword({
     }
     showLoader();
     fetch(`${backend}/api/v1/get/newpw`, {
-      method: "GET",
+      method: "GET"
     })
       .then((response) => {
         if (response.status !== 200) {
@@ -146,7 +249,7 @@ export function NewPassword({
             encryptPw(password, pwval)
           )}`,
           {
-            method: "POST",
+            method: "POST"
           }
         ).then((response) => {
           if (response.status !== 200) {
@@ -163,9 +266,30 @@ export function NewPassword({
       });
   };
 
+  const action = (
+    <>
+      <Button
+        sx={{
+          color: "white",
+          backgroundColor: "#3f50b5",
+          ":hover": {
+            backgroundColor: "#282c34"
+          },
+          borderRadius: "4px"
+        }}
+        color="primary"
+        variant="contained"
+        size="small"
+        onClick={handleClose}
+      >
+        Close
+      </Button>
+    </>
+  );
+
   return (
-    <div>
-      <div>We need a key name for the new password we are generating!</div>
+    <div className="Password-container">
+      <div className="Password-header">Enter a keyname for your password!</div>
       <TextField
         label="New Keyname"
         type="text"
@@ -175,21 +299,79 @@ export function NewPassword({
         value={key}
         autoFocus={true}
         onKeyPress={onKeyPress}
+        sx={{
+          width: "100%",
+          marginTop: "12px",
+          marginBottom: "24px",
+          fieldset: { borderColor: "black" },
+          input: { color: "black" },
+          label: { color: "black" },
+          "& .MuiOutlinedInput-root": {
+            "&.Mui-focused fieldset": {
+              borderColor: "#3f50b5"
+            }
+          },
+          "&:hover fieldset": {
+            borderColor: "#3f50b5 !important"
+          }
+        }}
+        InputLabelProps={{
+          sx: { "&.Mui-focused": { color: "#3f50b5" } }
+        }}
       />
-      <Button type="button" onClick={submit}>
+      <Button
+        sx={{
+          width: "100%",
+          height: "45px",
+          borderRadius: "8px",
+          marginTop: "8px",
+          backgroundColor: "#282c34",
+          ":hover": {
+            backgroundColor: "#3f50b5"
+          },
+          fontWeight: "bold",
+          color: "white"
+        }}
+        type="button"
+        onClick={submit}
+      >
         Generate
       </Button>
-      <div>
+      <div style={{ width: "100%", marginTop: "16px" }}>
         {copyText === "" ? (
           ""
         ) : (
-          <div className="copy">
-            Generated and <span className="copy-alert">copied</span> to your
-            clipboard!{" "}
+          <div style={{ width: "100%" }}>
+            <CopyToClipboard
+              onCopy={() => {
+                handleClick();
+              }}
+              text={copyText}
+            >
+              <Alert
+                sx={{
+                  textAlign: "left",
+                  ":hover": {
+                    backgroundColor: "black"
+                  }
+                }}
+                severity="info"
+              >
+                <AlertTitle>Generated a new password!</AlertTitle>
+                Click here to copy.
+              </Alert>
+            </CopyToClipboard>
           </div>
         )}
-        <CopyText text={copyText} copyOnLoad={true} />
       </div>
+      <Snackbar
+        open={open}
+        autoHideDuration={6000}
+        onClose={handleClose}
+        message="Password Copied!"
+        action={action}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
     </div>
   );
 }

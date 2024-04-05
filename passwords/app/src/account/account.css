@@ -34,8 +34,17 @@ button:hover {
 
 .SignIn-info {
     text-align: left;
+    display: flex;
+    flex-direction: column;
+    /* font-size: calc(6px + 1vmin); */
     /* width: 200px;
     padding: 20px; */
+}
+
+.Input-Header-text {
+    text-align: left;
+    font-size: calc(6px + 1vmin);
+    margin-bottom: 12px;
 }
 
 .SignIn-link {
@@ -55,8 +64,8 @@ button:hover {
 .SignIn-error {
     /* color: red; */
     font-style: italic;
-    font-size: calc(3vmin);
-    padding: 5px;
+    font-size: calc(1vmin);
+    margin-bottom: 24px;
 }
 
 .SignIn-error-invis {
@@ -65,16 +74,19 @@ button:hover {
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+    margin-bottom: 24px;
 }
 
 .Account {
-    /* min-height: 100vh;
+    max-height: 35vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     font-size: calc(10px + 3vmin);
-    color: white; */
+    color: black;
+    padding: 16px;
+    width: 100%;
 }
 
 .Account-dropdown {
@@ -192,7 +204,8 @@ button:hover {
 }
 
 .copy {
-    text-align: left;
+    color: black;
+    font-size: calc(8px + 1vmin);
 }
 
 .copy-prompt {
@@ -228,4 +241,19 @@ button:hover {
     opacity: 0;
     transition: all 300ms linear;
     cursor: default;
+}
+
+.Password-header {
+    color: black;
+    font-size: calc(8px + 1vmin);
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+.Password-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
 }

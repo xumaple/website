@@ -36,27 +36,31 @@ export default function App() {
     <div className="App">
       <ThemeProvider theme={Theme}>
         <CssBaseline />
-        {isSignedIn ? (
-          <Account
-            username={username}
-            en_user={en_user}
-            password={password}
-            en_pw={en_pw}
-            backend={backend}
-            reset={resetAccountInfo}
-          />
-        ) : (
-          <div className="App-header">
-            <p>"Welcome to ObscurePasswordManager!"</p>
-            <div className="App-subheader">
-              <SignIn
-                user={username}
+        <div className="App-content">
+          <div className="App-container">
+            {isSignedIn ? (
+              <Account
+                username={username}
+                en_user={en_user}
+                password={password}
+                en_pw={en_pw}
                 backend={backend}
-                setAccountInfo={setAccountInfo}
+                reset={resetAccountInfo}
               />
-            </div>
+            ) : (
+              <>
+                <p style={{ fontWeight: "bold" }}>🔐 Welcome to MapoPass 🔐</p>
+                <div className="App-subheader">
+                  <SignIn
+                    user={username}
+                    backend={backend}
+                    setAccountInfo={setAccountInfo}
+                  />
+                </div>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </ThemeProvider>
     </div>
   );

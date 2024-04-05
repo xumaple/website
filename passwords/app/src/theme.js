@@ -1,20 +1,20 @@
-import { createTheme } from '@mui/material/styles';
-import { deepPurple, blueGrey, lightBlue } from '@mui/material/colors';
+import { createTheme } from "@mui/material/styles";
+import { deepPurple, blueGrey, lightBlue } from "@mui/material/colors";
 
 const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: "dark",
     text: {
-      primary: lightBlue[50],
+      primary: lightBlue[50]
     },
     secondary: {
-      main: '#ce97d8',
+      main: "#ce97d8"
     },
     background: {
       default: blueGrey[900]
     },
-    contrastThreshold: 4.5,
-  },
+    contrastThreshold: 4.5
+  }
 });
 
 export default theme;
