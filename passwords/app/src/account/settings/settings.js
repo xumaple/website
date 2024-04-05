@@ -93,7 +93,7 @@ export default function SettingsModal({
   };
 
   return (
-    <div>
+    <div key="Settings">
       <Modal
         isOpen={show}
         onRequestClose={closeModal}
