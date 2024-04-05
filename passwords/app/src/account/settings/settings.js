@@ -31,6 +31,7 @@ export default function SettingsModal({
   en_pw,
   backend,
   setPassword,
+  setEnPassword,
   show,
   stopShowing,
 }) {
@@ -70,7 +71,8 @@ export default function SettingsModal({
     if (res) {
       // success
       setPw(newPwTry);
-      setPassword(newPwTry);
+      setPassword(newPw);
+      setEnPassword(newPwTry);
       setMsg(<div className="green">Password updated successfully.</div>);
     } else {
       setMsg("");
