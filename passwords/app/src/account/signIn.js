@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { errorColor, backgroundColor, highlightColor } from "../theme";
 import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
 import { encryptMaster, checkPassword } from "../crypto/encrypt";
 import { showLoader, hideLoader } from "../loader/loader";
 import { useTheme } from "@mui/material/styles";
@@ -45,7 +46,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
         : `${backend}/api/v1/get/verifyuser?username=${submittedUser}&password=${submittedPw}`,
       {
         method: isCreatingAccount ? "POST" : "GET",
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "text/plain" }
       }
     )
       .then((response) => {
@@ -97,22 +98,12 @@ export default function SignIn({ user, backend, setAccountInfo }) {
   return (
     <div className="SignIn">
       <div className="SignIn-info">
-        {isCreatingAccount ? (
-          <div>Please set up a new account:</div>
-        ) : (
-          <div>To begin, please sign in to your account:</div>
-        )}
-        <div
-          className={
-            errorMsg.length === 0 ? "SignIn-error-invis" : "SignIn-error"
-          }
-          style={
-            errorMsg.length === 0
-              ? { color: backgroundColor }
-              : { color: errorColor }
-          }
-        >
-          {errorMsg.length === 0 ? "NoError" : errorMsg}
+        <div className="Input-Header-text">
+          {isCreatingAccount ? (
+            <div>Please set up a new account:</div>
+          ) : (
+            <div>To begin, please sign in to your account:</div>
+          )}
         </div>
         <TextField
           type="text"
@@ -125,6 +116,22 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           onKeyPress={(e) => {
             onKeyPress(e, isCreatingAccount);
           }}
+          sx={{
+            fieldset: { borderColor: "black" },
+            input: { color: "black" },
+            label: { color: "black" },
+            "& .MuiOutlinedInput-root": {
+              "&.Mui-focused fieldset": {
+                borderColor: "#3f50b5"
+              }
+            },
+            "&:hover fieldset": {
+              borderColor: "#3f50b5 !important"
+            }
+          }}
+          InputLabelProps={{
+            sx: { "&.Mui-focused": { color: "#3f50b5" } }
+          }}
         />
         <TextField
           type="password"
@@ -136,17 +143,61 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           onKeyPress={(e) => {
             onKeyPress(e, isCreatingAccount);
           }}
+          sx={{
+            marginTop: "12px",
+            fieldset: { borderColor: "black" },
+            input: { color: "black" },
+            label: { color: "black" },
+            "& .MuiOutlinedInput-root": {
+              "&.Mui-focused fieldset": {
+                borderColor: "#3f50b5"
+              }
+            },
+            "&:hover fieldset": {
+              borderColor: "#3f50b5 !important"
+            }
+          }}
+          InputLabelProps={{
+            sx: { "&.Mui-focused": { color: "#3f50b5" } }
+          }}
         />
+        <div
+          className={
+            errorMsg.length === 0 ? "SignIn-error-invis" : "SignIn-error"
+          }
+          style={
+            errorMsg.length === 0
+              ? { color: backgroundColor }
+              : { color: errorColor }
+          }
+        >
+          {errorMsg.length === 0 ? "" : errorMsg}
+        </div>
       </div>
-      <button type="button" onClick={submit}>
+      <Button
+        variant="contained"
+        type="button"
+        sx={{
+          width: "100%",
+          height: "45px",
+          borderRadius: "8px",
+          backgroundColor: "#282c34",
+          ":hover": {
+            backgroundColor: "#3f50b5"
+          },
+          fontWeight: "bold",
+          color: "white"
+        }}
+        onClick={submit}
+      >
         {isCreatingAccount ? "Sign up" : "Log In"}
-      </button>
+      </Button>
       {isCreatingAccount ? (
-        <p>
+        <p style={{ fontSize: "18px" }}>
           Have an account already? Log in{" "}
           <span
             className="SignIn-link"
-            style={{ color: highlightColor }}
+            style={{ color: "#3f50b5" }}
             onClick={() => {
               toggleCreatingAccount(false);
             }}
@@ -156,11 +207,11 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           .
         </p>
       ) : (
-        <p>
+        <p style={{ fontSize: "18px" }}>
           First time? Sign up{" "}
           <span
             className="SignIn-link"
-            style={{ color: highlightColor }}
+            style={{ color: "#3f50b5" }}
             onClick={() => {
               toggleCreatingAccount(true);
             }}
