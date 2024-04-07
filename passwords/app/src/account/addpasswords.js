@@ -65,7 +65,6 @@ let PasswordInput = ({
     setInnerUploadState(UPLOAD_PENDING);
     setCurrentlyUploading(true);
 
-    // console.log("fetching with", key, pw);
     fetch(
       `${backend}/api/v1/post/newpw/${encodeURIComponent(
         key
@@ -176,49 +175,48 @@ export default function AddPasswordsModal({
     }
   };
 
-  const [passwordInputs, setPasswordInputs] = useState({
-    inputs: [NOT_UPLOADING],
-    numActivePasswordInputs: 1,
-  });
-  let setOnePasswordInput = (index, newInput, numActiveDiff) => {
-    setPasswordInputs({
-      inputs: [
-        ...passwordInputs.inputs.slice(0, index),
-        newInput,
-        ...passwordInputs.inputs.slice(index + 1),
-      ],
-      numActivePasswordInputs:
-        passwordInputs.numActivePasswordInputs + numActiveDiff,
-    });
+  let _changeOne = (inputs, index, newInput) => {
+    return [...inputs.slice(0, index), newInput, ...inputs.slice(index + 1)];
+  };
+  let reducePasswordInputs = (state, action) => {
+    if (action.type === ADD) {
+      return {
+        inputs: [...state.inputs, NOT_UPLOADING],
+        numActivePasswordInputs: state.numActivePasswordInputs + 1,
+      };
+    }
+    if (action.type === REMOVE) {
+      return {
+        inputs: _changeOne(state.inputs, action.index, null),
+        numActivePasswordInputs: state.numActivePasswordInputs - 1,
+      };
+    }
+    if (action.type === CHANGE_ONE) {
+      return {
+        inputs: _changeOne(state.inputs, action.index, action.newInput),
+        numActivePasswordInputs: state.numActivePasswordInputs,
+      };
+    }
+    if (action.type === SAVE_ALL) {
+      return {
+        inputs: state.inputs.map((x) => (x !== null ? IS_UPLOADING : null)),
+        numActivePasswordInputs: state.numActivePasswordInputs,
+      };
+    }
   };
   let addPasswordInput = () => {
-    setPasswordInputs({
-      inputs: [...passwordInputs.inputs, NOT_UPLOADING],
-      numActivePasswordInputs: passwordInputs.numActivePasswordInputs + 1,
-    });
+    updatePasswordInputs({ type: ADD });
   };
-  // Save state by not actually deleting entries, but simply set el to null if it was deleted
   let removePasswordInput = (i) => {
-    // Would be cool if removeMe could do a thing where it faded out over a second
-    setOnePasswordInput(i, null, -1);
+    updatePasswordInputs({ type: REMOVE, index: i });
   };
-  // const [passwordInputs, updatePasswordInputs] = useReducer(
-  //   reducePasswordInputs,
-  //   { inputs: [NOT_UPLOADING], numActivePasswordInputs: 1 }
-  // );
-  // let reducePasswordInputs = (action) => {
-
-  // }
-
   let saveAllPasswords = () => {
-    setPasswordInputs({
-      inputs: passwordInputs.inputs.map((x) =>
-        x !== null ? IS_UPLOADING : null
-      ),
-
-      numActivePasswordInputs: passwordInputs.numActivePasswordInputs,
-    });
+    updatePasswordInputs({ type: SAVE_ALL });
   };
+  const [passwordInputs, updatePasswordInputs] = useReducer(
+    reducePasswordInputs,
+    { inputs: [NOT_UPLOADING], numActivePasswordInputs: 1 }
+  );
 
   let getCommunicateUploadStateCallback = (el, index) => {
     if (el === IS_UPLOADING) {
@@ -227,7 +225,11 @@ export default function AddPasswordsModal({
         if (newState === UPLOAD_GOOD) {
           removePasswordInput(index);
         } else if (newState === UPLOAD_BAD) {
-          setOnePasswordInput(index, NOT_UPLOADING, 0);
+          updatePasswordInputs({
+            type: CHANGE_ONE,
+            index,
+            newInput: NOT_UPLOADING,
+          });
         }
       };
     }

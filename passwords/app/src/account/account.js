@@ -48,7 +48,9 @@ export default function Account({
     if (keys === undefined) {
       showLoader();
       fetch(
-        `${backend}/api/v1/get/getkeys?username=${en_user}&password=${currEnPw}`,
+        `${backend}/api/v1/get/getkeys?username=${encodeURIComponent(
+          en_user
+        )}&password=${encodeURIComponent(currEnPw)}`,
         {
           method: "GET",
         }

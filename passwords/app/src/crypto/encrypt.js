@@ -44,7 +44,9 @@ function decryptAES(en_text, key) {
 
 export async function changePassword(backend, en_user, pw, newPw) {
   let result = await fetch(
-    `${backend}/api/v1/get/getpws?username=${en_user}&password=${pw}`,
+    `${backend}/api/v1/get/getpws?username=${encodeURIComponent(
+      en_user
+    )}&password=${encodeURIComponent(pw)}`,
     {
       method: "GET",
       headers: { "Content-Type": "text/plain" },
@@ -62,7 +64,11 @@ export async function changePassword(backend, en_user, pw, newPw) {
       console.log("got to", updated_pws);
       return fetch(
         // `${backend}/api/v1/get/getpws/${en_user}/${pw}`,
-        `${backend}/api/v1/post/updateuser?username=${en_user}&password=${pw}&new_password=${newPw}`,
+        `${backend}/api/v1/post/updateuser?username=${encodeURIComponent(
+          en_user
+        )}&password=${encodeURIComponent(pw)}&new_password=${encodeURIComponent(
+          newPw
+        )}`,
         {
           method: "POST",
           body: JSON.stringify(updated_pws),
