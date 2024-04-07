@@ -97,7 +97,7 @@ export default function Account({
       onClick={() => toggleDrawer(false)}
     >
       <List>
-        <ListItem key={Account} disablePadding>
+        <ListItem key="username" disablePadding>
           <ListItemText
             primaryTypographyProps={{
               fontSize: "18px",
@@ -109,7 +109,7 @@ export default function Account({
         </ListItem>
       </List>
       <List>
-        <ListItem key={Account} disablePadding>
+        <ListItem key="AddPasswords" disablePadding>
           <ListItemButton
             onClick={() => {
               setShowAddPasswords(true);
@@ -121,7 +121,7 @@ export default function Account({
             <ListItemText primary={"Manually Add Passwords"} />
           </ListItemButton>
         </ListItem>
-        <ListItem key={Account} disablePadding>
+        <ListItem key="Settings" disablePadding>
           <ListItemButton
             onClick={() => {
               setShowSettings(true);
@@ -136,7 +136,7 @@ export default function Account({
       </List>
       <Divider />
       <List>
-        <ListItem key={Account} disablePadding>
+        <ListItem key="LogOut" disablePadding>
           <ListItemButton onClick={reset}>
             <ListItemIcon>
               <LogoutIcon />
