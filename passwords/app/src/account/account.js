@@ -212,11 +212,13 @@ export default function Account({
         stopShowing={() => setShowSettings(false)}
       />
       <AddPasswordsModal
+        password={currPassword}
         en_user={en_user}
         en_pw={currEnPw}
         backend={backend}
         show={showAddPasswords}
         stopShowing={() => setShowAddPasswords(false)}
+        addNewKey={addNewKey}
       />
     </div>
   );
