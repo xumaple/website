@@ -42,11 +42,15 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     showLoader();
     fetch(
       isCreatingAccount
-        ? `${backend}/api/v1/post/newuser?username=${submittedUser}&password=${submittedPw}`
-        : `${backend}/api/v1/get/verifyuser?username=${submittedUser}&password=${submittedPw}`,
+        ? `${backend}/api/v1/post/newuser?username=${encodeURIComponent(
+            submittedUser
+          )}&password=${encodeURIComponent(submittedPw)}`
+        : `${backend}/api/v1/get/verifyuser?username=${encodeURIComponent(
+            submittedUser
+          )}&password=${encodeURIComponent(submittedPw)}`,
       {
         method: isCreatingAccount ? "POST" : "GET",
-        headers: { "Content-Type": "text/plain" }
+        headers: { "Content-Type": "text/plain" },
       }
     )
       .then((response) => {
@@ -122,15 +126,15 @@ export default function SignIn({ user, backend, setAccountInfo }) {
             label: { color: "black" },
             "& .MuiOutlinedInput-root": {
               "&.Mui-focused fieldset": {
-                borderColor: "#3f50b5"
-              }
+                borderColor: "#3f50b5",
+              },
             },
             "&:hover fieldset": {
-              borderColor: "#3f50b5 !important"
-            }
+              borderColor: "#3f50b5 !important",
+            },
           }}
           InputLabelProps={{
-            sx: { "&.Mui-focused": { color: "#3f50b5" } }
+            sx: { "&.Mui-focused": { color: "#3f50b5" } },
           }}
         />
         <TextField
@@ -150,15 +154,15 @@ export default function SignIn({ user, backend, setAccountInfo }) {
             label: { color: "black" },
             "& .MuiOutlinedInput-root": {
               "&.Mui-focused fieldset": {
-                borderColor: "#3f50b5"
-              }
+                borderColor: "#3f50b5",
+              },
             },
             "&:hover fieldset": {
-              borderColor: "#3f50b5 !important"
-            }
+              borderColor: "#3f50b5 !important",
+            },
           }}
           InputLabelProps={{
-            sx: { "&.Mui-focused": { color: "#3f50b5" } }
+            sx: { "&.Mui-focused": { color: "#3f50b5" } },
           }}
         />
         <div
@@ -183,10 +187,10 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           borderRadius: "8px",
           backgroundColor: "#282c34",
           ":hover": {
-            backgroundColor: "#3f50b5"
+            backgroundColor: "#3f50b5",
           },
           fontWeight: "bold",
-          color: "white"
+          color: "white",
         }}
         onClick={submit}
       >
