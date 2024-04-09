@@ -17,12 +17,16 @@ const customStyles = {
     alignItems: "left",
     marginRight: "-50%",
     transform: "translate(-50%, -50%)",
-    backgroundColor: "black",
+    backgroundColor: "#282c34",
     opacity: 1,
+    borderRadius: "12px",
+    maxWidth: "500px",
+    width: "100%"
   },
   overlay: {
     backgroundColor: "rgba(255, 255, 255, 0.4)",
-  },
+    zIndex: 100
+  }
 };
 
 const UPLOAD_PENDING = 0;
@@ -37,7 +41,7 @@ let PasswordInput = ({
   en_pw,
   en_user,
   backend,
-  addNewKey,
+  addNewKey
 }) => {
   const [key, setKey] = useState("");
   const [pw, setPw] = useState("");
@@ -78,7 +82,7 @@ let PasswordInput = ({
         en_pw
       )}&pwval=${encodeURIComponent(encryptPw(password, pw))}`,
       {
-        method: "POST",
+        method: "POST"
       }
     )
       .then((response) => {
@@ -105,7 +109,7 @@ let PasswordInput = ({
     en_user,
     key,
     password,
-    pw,
+    pw
   ]);
 
   let showUploadStatus = (status) => {
@@ -122,21 +126,29 @@ let PasswordInput = ({
   };
 
   return (
-    <div>
-      {showRemoveMe && !currentlyUploading ? (
-        <Cancel
-          onClick={() => {
-            removeMe();
-          }}
-        />
-      ) : (
-        ""
-      )}
+    <div className="Manual-password-container">
       <TextField
         type="text"
         label="key"
         onChange={(e) => {
           setKey(e.target.value);
+        }}
+        sx={{
+          width: "50%",
+          fieldset: { borderColor: "rgba(200, 200, 200, 0.96);" },
+          input: { color: "rgba(200, 200, 200, 0.96);" },
+          label: { color: "rgba(200, 200, 200, 0.96);" },
+          "& .MuiOutlinedInput-root": {
+            "&.Mui-focused fieldset": {
+              borderColor: "#3f50b5"
+            }
+          },
+          "&:hover fieldset": {
+            borderColor: "#3f50b5 !important"
+          }
+        }}
+        InputLabelProps={{
+          sx: { "&.Mui-focused": { color: "#3f50b5" } }
         }}
         value={key}
       />
@@ -146,8 +158,37 @@ let PasswordInput = ({
         onChange={(e) => {
           setPw(e.target.value);
         }}
+        sx={{
+          width: "50%",
+          fieldset: { borderColor: "rgba(200, 200, 200, 0.96);" },
+          input: { color: "rgba(200, 200, 200, 0.96);" },
+          label: { color: "rgba(200, 200, 200, 0.96);" },
+          "& .MuiOutlinedInput-root": {
+            "&.Mui-focused fieldset": {
+              borderColor: "#3f50b5"
+            }
+          },
+          "&:hover fieldset": {
+            borderColor: "#3f50b5 !important"
+          }
+        }}
+        InputLabelProps={{
+          sx: { "&.Mui-focused": { color: "#3f50b5" } }
+        }}
         value={pw}
       />
+      {showRemoveMe && !currentlyUploading && (
+        <Cancel
+          onClick={() => {
+            removeMe();
+          }}
+          sx={{
+            "&:hover": {
+              color: "red"
+            }
+          }}
+        />
+      )}
       {showUploadStatus(uploadState)}
     </div>
   );
@@ -169,7 +210,7 @@ export default function AddPasswordsModal({
   backend,
   show,
   stopShowing,
-  addNewKey,
+  addNewKey
 }) {
   useEffect(() => {
     Modal.setAppElement("#account-root");
@@ -188,25 +229,25 @@ export default function AddPasswordsModal({
     if (action.type === ADD) {
       return {
         inputs: [...state.inputs, NOT_UPLOADING],
-        numActivePasswordInputs: state.numActivePasswordInputs + 1,
+        numActivePasswordInputs: state.numActivePasswordInputs + 1
       };
     }
     if (action.type === REMOVE) {
       return {
         inputs: _changeOne(state.inputs, action.index, null),
-        numActivePasswordInputs: state.numActivePasswordInputs - 1,
+        numActivePasswordInputs: state.numActivePasswordInputs - 1
       };
     }
     if (action.type === CHANGE_ONE) {
       return {
         inputs: _changeOne(state.inputs, action.index, action.newInput),
-        numActivePasswordInputs: state.numActivePasswordInputs,
+        numActivePasswordInputs: state.numActivePasswordInputs
       };
     }
     if (action.type === SAVE_ALL) {
       return {
         inputs: state.inputs.map((x) => (x !== null ? IS_UPLOADING : null)),
-        numActivePasswordInputs: state.numActivePasswordInputs,
+        numActivePasswordInputs: state.numActivePasswordInputs
       };
     }
   };
@@ -234,7 +275,7 @@ export default function AddPasswordsModal({
           updatePasswordInputs({
             type: CHANGE_ONE,
             index,
-            newInput: NOT_UPLOADING,
+            newInput: NOT_UPLOADING
           });
         }
       };
@@ -255,33 +296,71 @@ export default function AddPasswordsModal({
         closeTimeoutMS={200}
       >
         <div>
-          <h1>Manually Add Password</h1>
-          {passwordInputs.inputs.map((el, i) =>
-            el !== null ? (
-              <PasswordInput
-                key={i}
-                showRemoveMe={showRemoveMe}
-                removeMe={() => {
-                  removePasswordInput(i);
-                }}
-                communicateUploadState={getCommunicateUploadStateCallback(
-                  el,
-                  i
-                )}
-                password={password}
-                en_pw={en_pw}
-                en_user={en_user}
-                backend={backend}
-                addNewKey={addNewKey}
-              />
-            ) : (
-              ""
-            )
-          )}
-
-          <Button onClick={addPasswordInput}>add one</Button>
+          <h2 style={{ textAlign: "center" }}>Manually Add Password</h2>
+          <div className="Password-inputs-container">
+            {passwordInputs.inputs.map(
+              (el, i) =>
+                el !== null && (
+                  <PasswordInput
+                    key={i}
+                    showRemoveMe={showRemoveMe}
+                    removeMe={() => {
+                      removePasswordInput(i);
+                    }}
+                    communicateUploadState={getCommunicateUploadStateCallback(
+                      el,
+                      i
+                    )}
+                    password={password}
+                    en_pw={en_pw}
+                    en_user={en_user}
+                    backend={backend}
+                    addNewKey={addNewKey}
+                  />
+                )
+            )}
+          </div>
+          <Button
+            onClick={addPasswordInput}
+            variant="outlined"
+            type="button"
+            sx={{
+              marginTop: "24px",
+              width: "100%",
+              height: "45px",
+              borderRadius: "8px",
+              ":hover": {
+                backgroundColor: "#3f50b5",
+                borderColor: "rgba(200, 200, 200, 0.96)"
+              },
+              borderColor: "rgba(200, 200, 200, 0.96)",
+              fontWeight: "bold",
+              color: "white"
+            }}
+          >
+            add one
+          </Button>
           <div></div>
-          <Button onClick={saveAllPasswords}>Save all passwords</Button>
+          <Button
+            onClick={saveAllPasswords}
+            variant="outlined"
+            type="button"
+            sx={{
+              marginTop: "12px",
+              width: "100%",
+              height: "45px",
+              borderRadius: "8px",
+              ":hover": {
+                borderColor: "white"
+              },
+              backgroundColor: "#3f50b5",
+              borderColor: "rgba(200, 200, 200, 0.96)",
+              fontWeight: "bold",
+              color: "white"
+            }}
+          >
+            Save all passwords
+          </Button>
         </div>
       </Modal>
     </div>
