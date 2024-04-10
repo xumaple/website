@@ -270,7 +270,10 @@ export default function AddPasswordsModal({
       return (newState) => {
         console.log("previous state: ", passwordInputs.inputs);
         if (newState === UPLOAD_GOOD) {
-          removePasswordInput(index);
+          // Allows check mark to show up but need to work on animation.
+          setTimeout(() => {
+            removePasswordInput(index);
+          }, 2000);
         } else if (newState === UPLOAD_BAD) {
           updatePasswordInputs({
             type: CHANGE_ONE,
