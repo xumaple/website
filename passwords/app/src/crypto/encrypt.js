@@ -2,7 +2,6 @@ import sha3 from "crypto-js/sha3";
 import sha256 from "crypto-js/sha256";
 import aes from "crypto-js/aes";
 import Utf8 from "crypto-js/enc-utf8";
-// import NoPadding from "crypto-js/pad-nopadding";
 
 const PW_MIN_LEN = 13;
 
@@ -20,25 +19,14 @@ export function decryptPw(mp, en_password) {
 
 export function shaHash(text) {
   return sha256(text).toString();
-  // return sha3(text, { outputLength: 256 }).toString();
 }
 
 function encryptAES(text, key) {
-  return aes
-    .encrypt(
-      text,
-      key
-      // { mode: NoPadding }
-    )
-    .toString();
+  return aes.encrypt(text, key).toString();
 }
 
 function decryptAES(en_text, key) {
-  const bytes = aes.decrypt(
-    en_text,
-    key
-    // { mode: NoPadding }
-  );
+  const bytes = aes.decrypt(en_text, key);
   return bytes.toString(Utf8);
 }
 
@@ -63,7 +51,6 @@ export async function changePassword(backend, en_user, pw, newPw) {
       const updated_pws = json.map((p) => encryptPw(newPw, decryptPw(pw, p)));
       console.log("got to", updated_pws);
       return fetch(
-        // `${backend}/api/v1/get/getpws/${en_user}/${pw}`,
         `${backend}/api/v1/post/updateuser?username=${encodeURIComponent(
           en_user
         )}&password=${encodeURIComponent(pw)}&new_password=${encodeURIComponent(

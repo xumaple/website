@@ -119,7 +119,6 @@ export function QueryPassword({
         autoHighlight={true}
         clearOnBlur={true}
         clearOnEscape={true}
-        // openOnFocus={true}
         selectOnFocus={true}
         readOnly={keys === undefined}
         renderInput={(s) => (
@@ -148,7 +147,6 @@ export function QueryPassword({
           />
         )}
         onChange={onAcChange}
-        // onInputChange={setInputValue}
       />
       {retrieved !== "" && (
         <div style={{ width: "100%" }}>

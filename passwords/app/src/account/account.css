@@ -36,9 +36,6 @@ button:hover {
     text-align: left;
     display: flex;
     flex-direction: column;
-    /* font-size: calc(6px + 1vmin); */
-    /* width: 200px;
-    padding: 20px; */
 }
 
 .Input-Header-text {
@@ -47,29 +44,17 @@ button:hover {
     margin-bottom: 12px;
 }
 
-.SignIn-link {
-    /* color: red; */
-}
-
 .SignIn-link:hover {
     cursor: pointer;
 }
 
-/* .SignIn input[type=text], input[type="password"] {
-    padding: 10px;
-    margin:10px 0;
-    font-size: calc(5px + 2vmin)
-} */
-
 .SignIn-error {
-    /* color: red; */
     font-style: italic;
     font-size: calc(1vmin);
     margin-bottom: 24px;
 }
 
 .SignIn-error-invis {
-    /* color: #282c34; */
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
@@ -187,8 +172,6 @@ button:hover {
 
 .Account-info .ac {
     color: white;
-    /* color:rgba(185, 168, 168, 0.802); */
-    /* background-color: white; */
 }
 
 .Account-info .toggle {
