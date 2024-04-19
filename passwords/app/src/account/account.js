@@ -26,7 +26,7 @@ export default function Account({
   backend,
   password,
   en_pw,
-  reset,
+  reset
 }) {
   let [isQueryView, setIsQueryView] = useState(true); // true == queryView; false == newPasswordView
   let [showSettings, setShowSettings] = useState(false);
@@ -51,7 +51,7 @@ export default function Account({
           en_user
         )}&password=${encodeURIComponent(currEnPw)}`,
         {
-          method: "GET",
+          method: "GET"
         }
       )
         .then((response) => {
@@ -101,7 +101,11 @@ export default function Account({
             primaryTypographyProps={{
               fontSize: "18px",
               fontWeight: "bold",
-              marginLeft: "16px",
+              marginLeft: "24px",
+              marginRight: "24px"
+            }}
+            sx={{
+              overflowWrap: "break-word"
             }}
             primary={username}
           />
@@ -192,8 +196,8 @@ export default function Account({
               color: "white",
               fontWeight: "bold",
               ":hover": {
-                backgroundColor: "#282c34",
-              },
+                backgroundColor: "#282c34"
+              }
             }}
           >
             {isQueryView ? "Add new password" : "Query an existing password"}

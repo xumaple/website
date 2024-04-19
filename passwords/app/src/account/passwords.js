@@ -17,7 +17,7 @@ export function QueryPassword({
   password,
   en_pw,
   keys,
-  setErrorMsg,
+  setErrorMsg
 }) {
   let [kvs, setKvs] = useState({});
   let [retrieved, setRetrieved] = useState("");
@@ -33,7 +33,7 @@ export function QueryPassword({
             en_user
           )}&password=${encodeURIComponent(en_pw)}`,
           {
-            method: "GET",
+            method: "GET"
           }
         )
           .then((response) => {
@@ -83,9 +83,9 @@ export function QueryPassword({
           color: "white",
           backgroundColor: "#3f50b5",
           ":hover": {
-            backgroundColor: "#282c34",
+            backgroundColor: "#282c34"
           },
-          borderRadius: "4px",
+          borderRadius: "4px"
         }}
         color="primary"
         variant="contained"
@@ -107,11 +107,11 @@ export function QueryPassword({
           width: "100%",
           color: "blue",
           "& .MuiSvgIcon-root": {
-            color: "black",
+            color: "black"
           },
           "& .MuiIconButton-root ": {
-            marginLeft: "6px",
-          },
+            marginLeft: "6px"
+          }
         }}
         options={keys ? keys : []}
         autoComplete={true}
@@ -134,15 +134,15 @@ export function QueryPassword({
               label: { color: "black" },
               "& .MuiOutlinedInput-root": {
                 "&.Mui-focused fieldset": {
-                  borderColor: "#3f50b5",
-                },
+                  borderColor: "#3f50b5"
+                }
               },
               "&:hover fieldset": {
-                borderColor: "#3f50b5 !important",
-              },
+                borderColor: "#3f50b5 !important"
+              }
             }}
             InputLabelProps={{
-              sx: { "&.Mui-focused": { color: "#3f50b5" } },
+              sx: { "&.Mui-focused": { color: "#3f50b5" } }
             }}
           />
         )}
@@ -161,7 +161,8 @@ export function QueryPassword({
                 textAlign: "left",
                 ":hover": {
                   backgroundColor: "black",
-                },
+                  cursor: "copy"
+                }
               }}
               severity="info"
             >
@@ -190,7 +191,7 @@ export function NewPassword({
   en_pw,
   keys,
   addNewKey,
-  setErrorMsg,
+  setErrorMsg
 }) {
   const [key, setKey] = useState("");
   const [copyText, setCopyText] = useState("");
@@ -223,7 +224,7 @@ export function NewPassword({
     }
     showLoader();
     fetch(`${backend}/api/v1/get/newpw`, {
-      method: "GET",
+      method: "GET"
     })
       .then((response) => {
         if (response.status !== 200) {
@@ -242,7 +243,7 @@ export function NewPassword({
             encryptPw(password, pwval)
           )}`,
           {
-            method: "POST",
+            method: "POST"
           }
         ).then((response) => {
           if (response.status !== 200) {
@@ -266,9 +267,9 @@ export function NewPassword({
           color: "white",
           backgroundColor: "#3f50b5",
           ":hover": {
-            backgroundColor: "#282c34",
+            backgroundColor: "#282c34"
           },
-          borderRadius: "4px",
+          borderRadius: "4px"
         }}
         color="primary"
         variant="contained"
@@ -301,15 +302,15 @@ export function NewPassword({
           label: { color: "black" },
           "& .MuiOutlinedInput-root": {
             "&.Mui-focused fieldset": {
-              borderColor: "#3f50b5",
-            },
+              borderColor: "#3f50b5"
+            }
           },
           "&:hover fieldset": {
-            borderColor: "#3f50b5 !important",
-          },
+            borderColor: "#3f50b5 !important"
+          }
         }}
         InputLabelProps={{
-          sx: { "&.Mui-focused": { color: "#3f50b5" } },
+          sx: { "&.Mui-focused": { color: "#3f50b5" } }
         }}
       />
       <Button
@@ -320,10 +321,10 @@ export function NewPassword({
           marginTop: "8px",
           backgroundColor: "#282c34",
           ":hover": {
-            backgroundColor: "#3f50b5",
+            backgroundColor: "#3f50b5"
           },
           fontWeight: "bold",
-          color: "white",
+          color: "white"
         }}
         type="button"
         onClick={submit}
@@ -344,7 +345,8 @@ export function NewPassword({
                   textAlign: "left",
                   ":hover": {
                     backgroundColor: "black",
-                  },
+                    cursor: "copy"
+                  }
                 }}
                 severity="info"
               >
