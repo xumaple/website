@@ -17,7 +17,7 @@ export function QueryPassword({
   password,
   en_pw,
   keys,
-  setErrorMsg
+  setErrorMsg,
 }) {
   let [kvs, setKvs] = useState({});
   let [retrieved, setRetrieved] = useState("");
@@ -33,7 +33,7 @@ export function QueryPassword({
             en_user
           )}&password=${encodeURIComponent(en_pw)}`,
           {
-            method: "GET"
+            method: "GET",
           }
         )
           .then((response) => {
@@ -83,9 +83,9 @@ export function QueryPassword({
           color: "white",
           backgroundColor: "#3f50b5",
           ":hover": {
-            backgroundColor: "#282c34"
+            backgroundColor: "#282c34",
           },
-          borderRadius: "4px"
+          borderRadius: "4px",
         }}
         color="primary"
         variant="contained"
@@ -107,11 +107,11 @@ export function QueryPassword({
           width: "100%",
           color: "blue",
           "& .MuiSvgIcon-root": {
-            color: "black"
+            color: "black",
           },
           "& .MuiIconButton-root ": {
-            marginLeft: "6px"
-          }
+            marginLeft: "6px",
+          },
         }}
         options={keys ? keys : []}
         autoComplete={true}
@@ -135,15 +135,15 @@ export function QueryPassword({
               label: { color: "black" },
               "& .MuiOutlinedInput-root": {
                 "&.Mui-focused fieldset": {
-                  borderColor: "#3f50b5"
-                }
+                  borderColor: "#3f50b5",
+                },
               },
               "&:hover fieldset": {
-                borderColor: "#3f50b5 !important"
-              }
+                borderColor: "#3f50b5 !important",
+              },
             }}
             InputLabelProps={{
-              sx: { "&.Mui-focused": { color: "#3f50b5" } }
+              sx: { "&.Mui-focused": { color: "#3f50b5" } },
             }}
           />
         )}
@@ -162,8 +162,8 @@ export function QueryPassword({
               sx={{
                 textAlign: "left",
                 ":hover": {
-                  backgroundColor: "black"
-                }
+                  backgroundColor: "black",
+                },
               }}
               severity="info"
             >
@@ -171,7 +171,6 @@ export function QueryPassword({
               Click here to copy.
             </Alert>
           </CopyToClipboard>
-          {/* <CopyText text={kvs[retrieved]} copyOnLoad={false} /> */}
         </div>
       )}
       <Snackbar
@@ -193,7 +192,7 @@ export function NewPassword({
   en_pw,
   keys,
   addNewKey,
-  setErrorMsg
+  setErrorMsg,
 }) {
   const [key, setKey] = useState("");
   const [copyText, setCopyText] = useState("");
@@ -226,7 +225,7 @@ export function NewPassword({
     }
     showLoader();
     fetch(`${backend}/api/v1/get/newpw`, {
-      method: "GET"
+      method: "GET",
     })
       .then((response) => {
         if (response.status !== 200) {
@@ -245,7 +244,7 @@ export function NewPassword({
             encryptPw(password, pwval)
           )}`,
           {
-            method: "POST"
+            method: "POST",
           }
         ).then((response) => {
           if (response.status !== 200) {
@@ -269,9 +268,9 @@ export function NewPassword({
           color: "white",
           backgroundColor: "#3f50b5",
           ":hover": {
-            backgroundColor: "#282c34"
+            backgroundColor: "#282c34",
           },
-          borderRadius: "4px"
+          borderRadius: "4px",
         }}
         color="primary"
         variant="contained"
@@ -304,15 +303,15 @@ export function NewPassword({
           label: { color: "black" },
           "& .MuiOutlinedInput-root": {
             "&.Mui-focused fieldset": {
-              borderColor: "#3f50b5"
-            }
+              borderColor: "#3f50b5",
+            },
           },
           "&:hover fieldset": {
-            borderColor: "#3f50b5 !important"
-          }
+            borderColor: "#3f50b5 !important",
+          },
         }}
         InputLabelProps={{
-          sx: { "&.Mui-focused": { color: "#3f50b5" } }
+          sx: { "&.Mui-focused": { color: "#3f50b5" } },
         }}
       />
       <Button
@@ -323,10 +322,10 @@ export function NewPassword({
           marginTop: "8px",
           backgroundColor: "#282c34",
           ":hover": {
-            backgroundColor: "#3f50b5"
+            backgroundColor: "#3f50b5",
           },
           fontWeight: "bold",
-          color: "white"
+          color: "white",
         }}
         type="button"
         onClick={submit}
@@ -346,8 +345,8 @@ export function NewPassword({
                 sx={{
                   textAlign: "left",
                   ":hover": {
-                    backgroundColor: "black"
-                  }
+                    backgroundColor: "black",
+                  },
                 }}
                 severity="info"
               >
@@ -369,64 +368,3 @@ export function NewPassword({
     </div>
   );
 }
-
-// function CopyText({ text, copyOnLoad }) {
-//   const [copied, setCopied] = useState(copyOnLoad);
-//   // If copyOnLoad==true, then showPrompt starts out false and then
-//   // useEffect() will change to true. Else, showPrompt starts out
-//   // true to give user an opportunity to copy.
-//   const [showPrompt, setShowPrompt] = useState(!copyOnLoad);
-//   const [showAlert, setShowAlert] = useState(false);
-
-//   useEffect(() => {
-//     if (copyOnLoad && text !== "") {
-//       console.log("copying");
-//       copy(text);
-//       setCopied(true);
-//       if (showPrompt === false) {
-//         setTimeout(() => {
-//           setShowPrompt(true);
-//         }, 1500);
-//       } else {
-//         setShowAlert(true);
-//       }
-//     }
-//   }, [text]);
-
-//   if (text === null) {
-//     return <div></div>;
-//   }
-//   return (
-//     <div className="copy">
-//       <div
-//         className={`copy-alert ${
-//           showAlert ? "copy-alert-shown" : "copy-alert-hidden"
-//         }`}
-//         // onTransitionEnd={() => {
-//         //   setShowAlert(false);
-//         // }}
-//       >
-//         Copied!
-//       </div>
-//       <CopyToClipboard
-//         text={text}
-//         onCopy={() => {
-//           setShowAlert(true);
-//           setCopied(true);
-//         }}
-//       >
-//         <div
-//           className={`copy-prompt ${
-//             showPrompt ? "copy-prompt-shown" : "copy-prompt-hidden"
-//           }`}
-//           onMouseEnter={() => {
-//             setShowAlert(false);
-//           }}
-//         >
-//           Click <span className="copy-prompt-press">here</span> to copy
-//           {copied ? " again" : ""}.
-//         </div>
-//       </CopyToClipboard>
-//     </div>
-//   );
-// }
