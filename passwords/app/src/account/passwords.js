@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { showLoader, hideLoader } from "../loader/loader";
 import { encryptPw, decryptPw } from "../crypto/encrypt";
 import Autocomplete from "@mui/material/Autocomplete";
@@ -7,9 +7,7 @@ import TextField from "@mui/material/TextField";
 import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
 import AlertTitle from "@mui/material/AlertTitle";
-import IconButton from "@mui/material/IconButton";
 import CopyToClipboard from "react-copy-to-clipboard";
-import copy from "copy-to-clipboard";
 import { KeyBinds } from "../util";
 import "./account.css";
 
@@ -152,9 +150,7 @@ export function QueryPassword({
         onChange={onAcChange}
         // onInputChange={setInputValue}
       />
-      {retrieved === "" ? (
-        ""
-      ) : (
+      {retrieved !== "" && (
         <div style={{ width: "100%" }}>
           <CopyToClipboard
             onCopy={() => {
@@ -175,7 +171,6 @@ export function QueryPassword({
               Click here to copy.
             </Alert>
           </CopyToClipboard>
-          {/* <CopyText text={kvs[retrieved]} copyOnLoad={false} /> */}
         </div>
       )}
       <Snackbar
@@ -338,9 +333,7 @@ export function NewPassword({
         Generate
       </Button>
       <div style={{ width: "100%", marginTop: "16px" }}>
-        {copyText === "" ? (
-          ""
-        ) : (
+        {copyText !== "" && (
           <div style={{ width: "100%" }}>
             <CopyToClipboard
               onCopy={() => {
@@ -372,67 +365,6 @@ export function NewPassword({
         action={action}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
-    </div>
-  );
-}
-
-function CopyText({ text, copyOnLoad }) {
-  const [copied, setCopied] = useState(copyOnLoad);
-  // If copyOnLoad==true, then showPrompt starts out false and then
-  // useEffect() will change to true. Else, showPrompt starts out
-  // true to give user an opportunity to copy.
-  const [showPrompt, setShowPrompt] = useState(!copyOnLoad);
-  const [showAlert, setShowAlert] = useState(false);
-
-  useEffect(() => {
-    if (copyOnLoad && text !== "") {
-      console.log("copying");
-      copy(text);
-      setCopied(true);
-      if (showPrompt === false) {
-        setTimeout(() => {
-          setShowPrompt(true);
-        }, 1500);
-      } else {
-        setShowAlert(true);
-      }
-    }
-  }, [text]);
-
-  if (text === null) {
-    return <div></div>;
-  }
-  return (
-    <div className="copy">
-      <div
-        className={`copy-alert ${
-          showAlert ? "copy-alert-shown" : "copy-alert-hidden"
-        }`}
-        // onTransitionEnd={() => {
-        //   setShowAlert(false);
-        // }}
-      >
-        Copied!
-      </div>
-      <CopyToClipboard
-        text={text}
-        onCopy={() => {
-          setShowAlert(true);
-          setCopied(true);
-        }}
-      >
-        <div
-          className={`copy-prompt ${
-            showPrompt ? "copy-prompt-shown" : "copy-prompt-hidden"
-          }`}
-          onMouseEnter={() => {
-            setShowAlert(false);
-          }}
-        >
-          Click <span className="copy-prompt-press">here</span> to copy
-          {copied ? " again" : ""}.
-        </div>
-      </CopyToClipboard>
     </div>
   );
 }

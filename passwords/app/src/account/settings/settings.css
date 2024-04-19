@@ -4,27 +4,24 @@
 }
 
 .Settings-modal .row {
-    display: flex;
-    justify-content: space-between;
-    flex-direction: row;
-    align-items: stretch;
+    justify-content: center;
     padding: 10px;
 }
 
 .Settings-modal .row div {
     display: flex;
-    align-content: flex-start;
-    padding: 8px;
 }
 
 .Settings-modal .row .info {
-    padding-top:28px;
+    padding-top: 28px;
 }
 
 .Settings-modal .buttons {
     display: flex;
     flex-direction: row;
     justify-content: space-around;
+    gap: 20px;
+    padding: 10px;
 }
 
 .Settings-modal .disabled {
@@ -45,7 +42,8 @@
 .Settings-modal .msg {
     visibility: visible;
     justify-items: end;
-    padding-bottom:25px
+    padding-bottom: 25px;
+    text-align: center;
 }
 
 .Settings-modal .msg .green {

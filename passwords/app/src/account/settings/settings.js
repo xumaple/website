@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import Modal from "react-modal";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
 import { showLoader, hideLoader } from "../../loader/loader";
 import {
   encryptMaster,
   changePassword,
-  checkPassword,
+  checkPassword
 } from "../../crypto/encrypt";
 import "./settings.css";
 
@@ -17,12 +19,16 @@ const customStyles = {
     alignItems: "left",
     marginRight: "-50%",
     transform: "translate(-50%, -50%)",
-    backgroundColor: "pink",
+    backgroundColor: "#282c34",
     opacity: 1,
+    borderRadius: "12px",
+    maxWidth: "400px",
+    width: "100%"
   },
   overlay: {
     backgroundColor: "rgba(255, 255, 255, 0.4)",
-  },
+    zIndex: 100
+  }
 };
 
 export default function SettingsModal({
@@ -33,7 +39,7 @@ export default function SettingsModal({
   setPassword,
   setEnPassword,
   show,
-  stopShowing,
+  stopShowing
 }) {
   const [pw, setPw] = useState(en_pw);
   const [newPw, setNewPw] = useState("");
@@ -102,48 +108,92 @@ export default function SettingsModal({
         closeTimeoutMS={200}
       >
         <div className="Settings-modal">
-          <h1>Edit Settings</h1>
+          <h2 style={{ alignSelf: "center" }}>Edit Account Info</h2>
           <div className="row">
-            <div>Username:</div>
             <div>
-              <input
-                className="disabled"
+              <TextField
                 type="text"
-                // onChange={(e)=>{setUsername(e.target.value);}}
+                label="Username"
                 value={username}
+                autoFocus={true}
                 disabled="disabled"
-
-                // onKeyPress={onKeyPress}
+                sx={{
+                  width: "100%",
+                  fieldset: { borderColor: "rgba(200, 200, 200, 0.96);" },
+                  input: { color: "rgba(200, 200, 200, 0.96);" },
+                  label: { color: "rgba(200, 200, 200, 0.96);" },
+                  "& .MuiOutlinedInput-root": {
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#3f50b5"
+                    }
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#3f50b5 !important"
+                  }
+                }}
+                InputLabelProps={{
+                  sx: { "&.Mui-focused": { color: "#3f50b5" } }
+                }}
               />
             </div>
           </div>
           <div className="row">
-            <div className="info">New Password:</div>
             <div>
-              <input
+              <TextField
                 type="password"
-                placeholder="new password"
+                label="New Password"
                 onChange={(e) => {
                   setNewPw(e.target.value);
                 }}
                 value={newPw}
-
-                // onKeyPress={onKeyPress}
+                autoFocus={true}
+                sx={{
+                  width: "100%",
+                  fieldset: { borderColor: "rgba(200, 200, 200, 0.96);" },
+                  input: { color: "rgba(200, 200, 200, 0.96);" },
+                  label: { color: "rgba(200, 200, 200, 0.96);" },
+                  "& .MuiOutlinedInput-root": {
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#3f50b5"
+                    }
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#3f50b5 !important"
+                  }
+                }}
+                InputLabelProps={{
+                  sx: { "&.Mui-focused": { color: "#3f50b5" } }
+                }}
               />
             </div>
           </div>
           <div className="row">
-            <div className="info">Confirm Password:</div>
             <div>
-              <input
+              <TextField
                 type="password"
-                placeholder="confirm password"
+                label="Confirm Password"
                 onChange={(e) => {
                   setNewPw2(e.target.value);
                 }}
                 value={newPw2}
-
-                // onKeyPress={onKeyPress}
+                autoFocus={true}
+                sx={{
+                  width: "100%",
+                  fieldset: { borderColor: "rgba(200, 200, 200, 0.96)" },
+                  input: { color: "rgba(200, 200, 200, 0.96);" },
+                  label: { color: "rgba(200, 200, 200, 0.96);" },
+                  "& .MuiOutlinedInput-root": {
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#3f50b5"
+                    }
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#3f50b5 !important"
+                  }
+                }}
+                InputLabelProps={{
+                  sx: { "&.Mui-focused": { color: "#3f50b5" } }
+                }}
               />
             </div>
           </div>
@@ -152,8 +202,44 @@ export default function SettingsModal({
             <div className="error">{errorMsg}</div>
           </div>
           <div className="buttons">
-            <button onClick={trySave}>Save</button>
-            <button onClick={closeModal}>Done</button>
+            <Button
+              variant="outlined"
+              type="button"
+              sx={{
+                width: "50%",
+                height: "45px",
+                borderRadius: "8px",
+                ":hover": {
+                  backgroundColor: "#3f50b5",
+                  borderColor: "rgba(200, 200, 200, 0.96)"
+                },
+                borderColor: "rgba(200, 200, 200, 0.96)",
+                fontWeight: "bold",
+                color: "white"
+              }}
+              onClick={closeModal}
+            >
+              Back
+            </Button>
+            <Button
+              variant="outlined"
+              type="button"
+              sx={{
+                width: "50%",
+                height: "45px",
+                borderRadius: "8px",
+                ":hover": {
+                  borderColor: "white"
+                },
+                backgroundColor: "#3f50b5",
+                borderColor: "rgba(200, 200, 200, 0.96)",
+                fontWeight: "bold",
+                color: "white"
+              }}
+              onClick={trySave}
+            >
+              Save
+            </Button>
           </div>
         </div>
       </Modal>
