@@ -21,12 +21,12 @@ const customStyles = {
     opacity: 1,
     borderRadius: "12px",
     maxWidth: "500px",
-    width: "100%"
+    width: "100%",
   },
   overlay: {
     backgroundColor: "rgba(255, 255, 255, 0.4)",
-    zIndex: 100
-  }
+    zIndex: 100,
+  },
 };
 
 const UPLOAD_PENDING = 0;
@@ -41,7 +41,7 @@ let PasswordInput = ({
   en_pw,
   en_user,
   backend,
-  addNewKey
+  addNewKey,
 }) => {
   const [key, setKey] = useState("");
   const [pw, setPw] = useState("");
@@ -82,7 +82,7 @@ let PasswordInput = ({
         en_pw
       )}&pwval=${encodeURIComponent(encryptPw(password, pw))}`,
       {
-        method: "POST"
+        method: "POST",
       }
     )
       .then((response) => {
@@ -109,7 +109,7 @@ let PasswordInput = ({
     en_user,
     key,
     password,
-    pw
+    pw,
   ]);
 
   let showUploadStatus = (status) => {
@@ -140,15 +140,15 @@ let PasswordInput = ({
           label: { color: "rgba(200, 200, 200, 0.96);" },
           "& .MuiOutlinedInput-root": {
             "&.Mui-focused fieldset": {
-              borderColor: "#3f50b5"
-            }
+              borderColor: "#3f50b5",
+            },
           },
           "&:hover fieldset": {
-            borderColor: "#3f50b5 !important"
-          }
+            borderColor: "#3f50b5 !important",
+          },
         }}
         InputLabelProps={{
-          sx: { "&.Mui-focused": { color: "#3f50b5" } }
+          sx: { "&.Mui-focused": { color: "#3f50b5" } },
         }}
         value={key}
       />
@@ -165,15 +165,15 @@ let PasswordInput = ({
           label: { color: "rgba(200, 200, 200, 0.96);" },
           "& .MuiOutlinedInput-root": {
             "&.Mui-focused fieldset": {
-              borderColor: "#3f50b5"
-            }
+              borderColor: "#3f50b5",
+            },
           },
           "&:hover fieldset": {
-            borderColor: "#3f50b5 !important"
-          }
+            borderColor: "#3f50b5 !important",
+          },
         }}
         InputLabelProps={{
-          sx: { "&.Mui-focused": { color: "#3f50b5" } }
+          sx: { "&.Mui-focused": { color: "#3f50b5" } },
         }}
         value={pw}
       />
@@ -184,8 +184,8 @@ let PasswordInput = ({
           }}
           sx={{
             "&:hover": {
-              color: "red"
-            }
+              color: "red",
+            },
           }}
         />
       )}
@@ -210,7 +210,7 @@ export default function AddPasswordsModal({
   backend,
   show,
   stopShowing,
-  addNewKey
+  addNewKey,
 }) {
   useEffect(() => {
     Modal.setAppElement("#account-root");
@@ -229,25 +229,25 @@ export default function AddPasswordsModal({
     if (action.type === ADD) {
       return {
         inputs: [...state.inputs, NOT_UPLOADING],
-        numActivePasswordInputs: state.numActivePasswordInputs + 1
+        numActivePasswordInputs: state.numActivePasswordInputs + 1,
       };
     }
     if (action.type === REMOVE) {
       return {
         inputs: _changeOne(state.inputs, action.index, null),
-        numActivePasswordInputs: state.numActivePasswordInputs - 1
+        numActivePasswordInputs: state.numActivePasswordInputs - 1,
       };
     }
     if (action.type === CHANGE_ONE) {
       return {
         inputs: _changeOne(state.inputs, action.index, action.newInput),
-        numActivePasswordInputs: state.numActivePasswordInputs
+        numActivePasswordInputs: state.numActivePasswordInputs,
       };
     }
     if (action.type === SAVE_ALL) {
       return {
         inputs: state.inputs.map((x) => (x !== null ? IS_UPLOADING : null)),
-        numActivePasswordInputs: state.numActivePasswordInputs
+        numActivePasswordInputs: state.numActivePasswordInputs,
       };
     }
   };
@@ -278,7 +278,7 @@ export default function AddPasswordsModal({
           updatePasswordInputs({
             type: CHANGE_ONE,
             index,
-            newInput: NOT_UPLOADING
+            newInput: NOT_UPLOADING,
           });
         }
       };
@@ -334,14 +334,14 @@ export default function AddPasswordsModal({
               borderRadius: "8px",
               ":hover": {
                 backgroundColor: "#3f50b5",
-                borderColor: "rgba(200, 200, 200, 0.96)"
+                borderColor: "rgba(200, 200, 200, 0.96)",
               },
               borderColor: "rgba(200, 200, 200, 0.96)",
               fontWeight: "bold",
-              color: "white"
+              color: "white",
             }}
           >
-            add one
+            add another
           </Button>
           <div></div>
           <Button
@@ -354,15 +354,15 @@ export default function AddPasswordsModal({
               height: "45px",
               borderRadius: "8px",
               ":hover": {
-                borderColor: "white"
+                borderColor: "white",
               },
               backgroundColor: "#3f50b5",
               borderColor: "rgba(200, 200, 200, 0.96)",
               fontWeight: "bold",
-              color: "white"
+              color: "white",
             }}
           >
-            Save all passwords
+            Save all
           </Button>
         </div>
       </Modal>

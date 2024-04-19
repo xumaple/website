@@ -28,7 +28,6 @@ export default function Account({
   en_pw,
   reset
 }) {
-  // const theme = useTheme();
   let [isQueryView, setIsQueryView] = useState(true); // true == queryView; false == newPasswordView
   let [showSettings, setShowSettings] = useState(false);
   let [showAddPasswords, setShowAddPasswords] = useState(false);
