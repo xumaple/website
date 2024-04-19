@@ -4,7 +4,7 @@ import aes from "crypto-js/aes";
 import Utf8 from "crypto-js/enc-utf8";
 // import NoPadding from "crypto-js/pad-nopadding";
 
-const PW_MIN_LEN = 3;
+const PW_MIN_LEN = 13;
 
 export function encryptMaster(password) {
   return sha3(password).toString().substring(0, 16);
