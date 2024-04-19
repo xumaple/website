@@ -6,7 +6,7 @@ import { showLoader, hideLoader } from "../../loader/loader";
 import {
   encryptMaster,
   changePassword,
-  checkPassword
+  checkPassword,
 } from "../../crypto/encrypt";
 import "./settings.css";
 
@@ -23,12 +23,12 @@ const customStyles = {
     opacity: 1,
     borderRadius: "12px",
     maxWidth: "400px",
-    width: "100%"
+    width: "100%",
   },
   overlay: {
     backgroundColor: "rgba(255, 255, 255, 0.4)",
-    zIndex: 100
-  }
+    zIndex: 100,
+  },
 };
 
 export default function SettingsModal({
@@ -39,7 +39,7 @@ export default function SettingsModal({
   setPassword,
   setEnPassword,
   show,
-  stopShowing
+  stopShowing,
 }) {
   const [pw, setPw] = useState(en_pw);
   const [newPw, setNewPw] = useState("");
@@ -124,15 +124,15 @@ export default function SettingsModal({
                   label: { color: "rgba(200, 200, 200, 0.96);" },
                   "& .MuiOutlinedInput-root": {
                     "&.Mui-focused fieldset": {
-                      borderColor: "#3f50b5"
-                    }
+                      borderColor: "#3f50b5",
+                    },
                   },
                   "&:hover fieldset": {
-                    borderColor: "#3f50b5 !important"
-                  }
+                    borderColor: "#3f50b5 !important",
+                  },
                 }}
                 InputLabelProps={{
-                  sx: { "&.Mui-focused": { color: "#3f50b5" } }
+                  sx: { "&.Mui-focused": { color: "#3f50b5" } },
                 }}
               />
             </div>
@@ -154,15 +154,15 @@ export default function SettingsModal({
                   label: { color: "rgba(200, 200, 200, 0.96);" },
                   "& .MuiOutlinedInput-root": {
                     "&.Mui-focused fieldset": {
-                      borderColor: "#3f50b5"
-                    }
+                      borderColor: "#3f50b5",
+                    },
                   },
                   "&:hover fieldset": {
-                    borderColor: "#3f50b5 !important"
-                  }
+                    borderColor: "#3f50b5 !important",
+                  },
                 }}
                 InputLabelProps={{
-                  sx: { "&.Mui-focused": { color: "#3f50b5" } }
+                  sx: { "&.Mui-focused": { color: "#3f50b5" } },
                 }}
               />
             </div>
@@ -171,7 +171,7 @@ export default function SettingsModal({
             <div>
               <TextField
                 type="password"
-                label="Confirm Password"
+                label="Confirm New Password"
                 onChange={(e) => {
                   setNewPw2(e.target.value);
                 }}
@@ -184,15 +184,15 @@ export default function SettingsModal({
                   label: { color: "rgba(200, 200, 200, 0.96);" },
                   "& .MuiOutlinedInput-root": {
                     "&.Mui-focused fieldset": {
-                      borderColor: "#3f50b5"
-                    }
+                      borderColor: "#3f50b5",
+                    },
                   },
                   "&:hover fieldset": {
-                    borderColor: "#3f50b5 !important"
-                  }
+                    borderColor: "#3f50b5 !important",
+                  },
                 }}
                 InputLabelProps={{
-                  sx: { "&.Mui-focused": { color: "#3f50b5" } }
+                  sx: { "&.Mui-focused": { color: "#3f50b5" } },
                 }}
               />
             </div>
@@ -211,11 +211,11 @@ export default function SettingsModal({
                 borderRadius: "8px",
                 ":hover": {
                   backgroundColor: "#3f50b5",
-                  borderColor: "rgba(200, 200, 200, 0.96)"
+                  borderColor: "rgba(200, 200, 200, 0.96)",
                 },
                 borderColor: "rgba(200, 200, 200, 0.96)",
                 fontWeight: "bold",
-                color: "white"
+                color: "white",
               }}
               onClick={closeModal}
             >
@@ -229,12 +229,12 @@ export default function SettingsModal({
                 height: "45px",
                 borderRadius: "8px",
                 ":hover": {
-                  borderColor: "white"
+                  borderColor: "white",
                 },
                 backgroundColor: "#3f50b5",
                 borderColor: "rgba(200, 200, 200, 0.96)",
                 fontWeight: "bold",
-                color: "white"
+                color: "white",
               }}
               onClick={trySave}
             >
