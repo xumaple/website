@@ -7,10 +7,10 @@ pub mod encrypt;
 use db::DbError;
 use encrypt::{generate_password, CryptoError};
 use rocket::{
-    http::{Status, Header},
+    http::{Header, Status},
     response::Responder,
-    Request, Response as RocketResponse,
     serde::json::Json,
+    Request, Response as RocketResponse,
 };
 use std::io::Cursor;
 
@@ -41,11 +41,10 @@ impl<'r> Responder<'r, 'static> for Error {
     }
 }
 
-
 #[derive(Responder)]
 pub struct Response {
     status: Status,
-    cors: Header<'static>
+    cors: Header<'static>,
 }
 impl Response {
     #[allow(non_snake_case)]
@@ -62,7 +61,7 @@ impl Response {
 #[response(status = 200, content_type = "json")]
 pub struct JsonResponse<T> {
     msg: Json<T>,
-    cors: Header<'static>
+    cors: Header<'static>,
 }
 impl<T> JsonResponse<T> {
     #[allow(non_snake_case)]
@@ -74,7 +73,6 @@ impl<T> JsonResponse<T> {
         })
     }
 }
-
 
 #[get("/get/newpw")]
 fn new_password() -> Result<JsonResponse<String>, Error> {
@@ -95,29 +93,48 @@ async fn create_user(username: String, password: String) -> Result<Response, Err
 }
 
 // TODO: add locks per user for all post requests
-#[post("/post/updateuser?<username>&<password>&<new_password>",
-       data = "<new_stored_passwords>")]
-async fn update_user(username: String, password: String, new_password: String, new_stored_passwords: Json<Vec<String>>) -> Result<Response, Error> {
-    db::change_master_password(username,
+#[post(
+    "/post/updateuser?<username>&<password>&<new_password>",
+    data = "<new_stored_passwords>"
+)]
+async fn update_user(
+    username: String,
+    password: String,
+    new_password: String,
+    new_stored_passwords: Json<Vec<String>>,
+) -> Result<Response, Error> {
+    db::change_master_password(
+        username,
         password,
         new_password,
-        new_stored_passwords.into_inner()
-    ).await?;
+        new_stored_passwords.into_inner(),
+    )
+    .await?;
     Response::Ok()
 }
 
 #[get("/get/getkeys?<username>&<password>")]
-async fn get_stored_keys(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
+async fn get_stored_keys(
+    username: String,
+    password: String,
+) -> Result<JsonResponse<Vec<String>>, Error> {
     JsonResponse::Ok(db::get_stored_keys(username, password).await?)
 }
 
 #[get("/get/getpw/<pwkey>?<username>&<password>")]
-async fn get_stored_password(username: String, password: String, pwkey: String) -> Result<JsonResponse<String>, Error> {
+async fn get_stored_password(
+    username: String,
+    password: String,
+    pwkey: String,
+) -> Result<JsonResponse<String>, Error> {
     JsonResponse::Ok(db::get_stored_password(username, password, pwkey).await?)
 }
 
 #[get("/get/getpws?<username>&<password>")]
-async fn get_stored_passwords(username: String, password: String) -> Result<JsonResponse<Vec<String>>, Error> {
+async fn get_stored_passwords(
+    username: String,
+    password: String,
+) -> Result<JsonResponse<Vec<String>>, Error> {
     JsonResponse::Ok(db::get_stored_passwords(username, password).await?)
 }
 
@@ -151,6 +168,8 @@ async fn root() -> String {
 // #[get("get/")]
 #[rocket::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // dotenv::dotenv().ok();
+    println!("{}", dotenv::dotenv().unwrap().display());
     db::connect().await?;
 
     let _rocket = rocket::build()
@@ -168,12 +187,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 change_stored_password,
             ],
         )
-        .mount(
-            "/",
-            routes![
-                root
-            ]
-        )
+        .mount("/", routes![root])
         .launch()
         .await?;
 

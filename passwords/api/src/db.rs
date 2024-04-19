@@ -67,7 +67,19 @@ pub async fn connect() -> Result<(), DbError> {
     let mut db_init_guard = db_init_lock.lock().await;
     if !*db_init_guard {
         // Not yet initialized
-        let client = Client::with_options(ClientOptions::parse_with_resolver_config("mongodb+srv://username:temppassword@cluster0.wwznyzn.mongodb.net/?retryWrites=true&w=majority", ResolverConfig::cloudflare()).await?)?;
+        let client = Client::with_options(
+            ClientOptions::parse_with_resolver_config(
+                format!(
+                    "mongodb+srv://{}:{}@{}?retryWrites=true&w=majority",
+                    std::env::var("MONGO_USER").expect("Need MONGO_USER env variable"),
+                    std::env::var("MONGO_PW").expect("Need MONGO_PW env variable"),
+                    std::env::var("MONGO_ENDPOINT").expect("Need MONGO_ENDPOINT env variable"),
+                )
+                .as_str(),
+                ResolverConfig::cloudflare(),
+            )
+            .await?,
+        )?;
 
         DB.set(client.database("users").collection::<User>("users")).expect(
             "PANIC: No one else should be initializing this as this thread holds the DB_INITIALIZED lock",
@@ -79,7 +91,10 @@ pub async fn connect() -> Result<(), DbError> {
     Ok(())
 }
 
-async fn authenticate_user(username: &String, password: String) -> Result<(&Collection<User>, User, OID), DbError> {
+async fn authenticate_user(
+    username: &String,
+    password: String,
+) -> Result<(&Collection<User>, User, OID), DbError> {
     let db = DB.get().unwrap();
     let en_user = user2oid(username);
     let user = find_user(username, en_user).await?;
@@ -143,16 +158,33 @@ pub async fn get_stored_keys(username: String, password: String) -> Result<Vec<S
     Ok(user.stored_passwords.into_iter().map(|kv| kv.key).collect())
 }
 
-pub async fn get_stored_password(username: String, password: String, pwkey: String) -> Result<String, DbError> {
+pub async fn get_stored_password(
+    username: String,
+    password: String,
+    pwkey: String,
+) -> Result<String, DbError> {
     let (_, user, _) = authenticate_user(&username, password).await?;
-    Ok(user.stored_passwords.iter().find(|kv| pwkey==kv.key).ok_or_else(|| DbError::GenericError {
-        error_msg: format!("Unable to find key {}", pwkey),
-    })?.en_password.clone())
+    Ok(user
+        .stored_passwords
+        .iter()
+        .find(|kv| pwkey == kv.key)
+        .ok_or_else(|| DbError::GenericError {
+            error_msg: format!("Unable to find key {}", pwkey),
+        })?
+        .en_password
+        .clone())
 }
 
-pub async fn get_stored_passwords(username: String, password: String) -> Result<Vec<String>, DbError> {
+pub async fn get_stored_passwords(
+    username: String,
+    password: String,
+) -> Result<Vec<String>, DbError> {
     let (_, user, _) = authenticate_user(&username, password).await?;
-    Ok(user.stored_passwords.into_iter().map(|kv| kv.en_password).collect())
+    Ok(user
+        .stored_passwords
+        .into_iter()
+        .map(|kv| kv.en_password)
+        .collect())
 }
 
 pub async fn add_stored_password(
@@ -233,9 +265,11 @@ pub async fn change_master_password(
 
     if user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
-            error_msg: format!("Expected {} updated passwords, found {}", 
-                user.stored_passwords.len(), 
-                updated_stored_passwords.len()),
+            error_msg: format!(
+                "Expected {} updated passwords, found {}",
+                user.stored_passwords.len(),
+                updated_stored_passwords.len()
+            ),
         });
     }
 
@@ -256,7 +290,8 @@ pub async fn change_master_password(
             }
         },
         None,
-    ).await?;
+    )
+    .await?;
 
     Ok(())
 }
