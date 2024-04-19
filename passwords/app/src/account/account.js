@@ -102,7 +102,11 @@ export default function Account({
             primaryTypographyProps={{
               fontSize: "18px",
               fontWeight: "bold",
-              marginLeft: "16px"
+              marginLeft: "24px",
+              marginRight: "24px"
+            }}
+            sx={{
+              overflowWrap: "break-word"
             }}
             primary={username}
           />

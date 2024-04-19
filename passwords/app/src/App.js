@@ -49,7 +49,30 @@ export default function App() {
               />
             ) : (
               <>
-                <p style={{ fontWeight: "bold" }}>🔐 Welcome to MapoPass 🔐</p>
+                <p
+                  style={{
+                    fontWeight: "bold",
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "5px"
+                  }}
+                >
+                  <img
+                    src="https://static-00.iconduck.com/assets.00/locked-with-key-emoji-1983x2048-c5krhj9s.png"
+                    alt="locked with key icon"
+                    width={22}
+                    height={22}
+                  />
+                  Welcome to MapoPass
+                  <img
+                    src="https://static-00.iconduck.com/assets.00/locked-with-key-emoji-1983x2048-c5krhj9s.png"
+                    alt="locked with key icon"
+                    width={22}
+                    height={22}
+                  />
+                </p>
                 <div className="App-subheader">
                   <SignIn
                     user={username}

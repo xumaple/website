@@ -114,13 +114,13 @@ let PasswordInput = ({
 
   let showUploadStatus = (status) => {
     if (status === UPLOAD_PENDING) {
-      return currentlyUploading ? <WaitingCircle /> : "";
+      return currentlyUploading && <WaitingCircle sx={{ color: "#eed202" }} />;
     }
     if (status === UPLOAD_GOOD) {
-      return <GoodCircle />;
+      return <GoodCircle sx={{ color: "green" }} />;
     }
     if (status === UPLOAD_BAD) {
-      return <BadCircle />;
+      return <BadCircle sx={{ color: "red" }} />;
     }
     return "";
   };
