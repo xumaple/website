@@ -6,3 +6,4 @@ target
 *.pem
 build
 .env
+.prod.env
