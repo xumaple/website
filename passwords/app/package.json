@@ -27,6 +27,7 @@
     "build": "react-scripts build",
     "prod": "react-scripts build && serve -s build",
     "test": "react-scripts test",
+    "test:unit": "react-scripts test --watchAll=false",
     "eject": "react-scripts eject",
     "dev": "concurrently -k \"BROWSER=none npm start\" \"npm:electron\"",
     "electron": "wait-on tcp:3000 && electron ."
