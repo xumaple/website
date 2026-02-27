@@ -207,6 +207,7 @@ export default function Account({
       <SettingsModal
         username={username}
         en_user={en_user}
+        password={currPassword}
         en_pw={currEnPw}
         backend={backend}
         setPassword={setCurrPassword}

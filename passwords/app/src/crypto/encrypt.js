@@ -30,11 +30,11 @@ function decryptAES(en_text, key) {
   return bytes.toString(Utf8);
 }
 
-export async function changePassword(backend, en_user, pw, newPw) {
+export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, newPlaintextPw, newEnPw) {
   let result = await fetch(
     `${backend}/api/v1/get/getpws?username=${encodeURIComponent(
       en_user
-    )}&password=${encodeURIComponent(pw)}`,
+    )}&password=${encodeURIComponent(oldEnPw)}`,
     {
       method: "GET",
       headers: { "Content-Type": "text/plain" },
@@ -48,13 +48,13 @@ export async function changePassword(backend, en_user, pw, newPw) {
       return response.json();
     })
     .then((json) => {
-      const updated_pws = json.map((p) => encryptPw(newPw, decryptPw(pw, p)));
+      const updated_pws = json.map((p) => encryptPw(newPlaintextPw, decryptPw(oldPlaintextPw, p)));
       console.log("got to", updated_pws);
       return fetch(
         `${backend}/api/v1/post/updateuser?username=${encodeURIComponent(
           en_user
-        )}&password=${encodeURIComponent(pw)}&new_password=${encodeURIComponent(
-          newPw
+        )}&password=${encodeURIComponent(oldEnPw)}&new_password=${encodeURIComponent(
+          newEnPw
         )}`,
         {
           method: "POST",

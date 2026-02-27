@@ -34,6 +34,7 @@ const customStyles = {
 export default function SettingsModal({
   username,
   en_user,
+  password,
   en_pw,
   backend,
   setPassword,
@@ -41,6 +42,7 @@ export default function SettingsModal({
   show,
   stopShowing,
 }) {
+  const [plaintextPw, setPlaintextPw] = useState(password);
   const [pw, setPw] = useState(en_pw);
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
@@ -73,9 +75,10 @@ export default function SettingsModal({
     setIsSaving(true);
     setMsg("Updating password...");
     showLoader();
-    let res = await changePassword(backend, en_user, pw, newPwTry);
+    let res = await changePassword(backend, en_user, plaintextPw, pw, newPw, newPwTry);
     if (res) {
       // success
+      setPlaintextPw(newPw);
       setPw(newPwTry);
       setPassword(newPw);
       setEnPassword(newPwTry);
