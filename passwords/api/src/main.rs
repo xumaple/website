@@ -26,7 +26,7 @@ impl<'r> Responder<'r, 'static> for Error {
     fn respond_to(self, _: &'r Request<'_>) -> Result<RocketResponse<'static>, Status> {
         println!(
             "Preparing error response. Recorded error: {}\n{:#?}",
-            self.to_string(),
+            self,
             self,
         );
 
