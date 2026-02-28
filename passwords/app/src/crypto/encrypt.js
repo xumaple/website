@@ -31,15 +31,13 @@ function decryptAES(en_text, key) {
 }
 
 export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, newPlaintextPw, newEnPw) {
-  let result = await fetch(
-    `${backend}/api/v1/get/getpws?username=${encodeURIComponent(
-      en_user
-    )}&password=${encodeURIComponent(oldEnPw)}`,
-    {
-      method: "GET",
-      headers: { "Content-Type": "text/plain" },
-    }
-  )
+  let result = await fetch(`${backend}/api/v2/passwords`, {
+    method: "GET",
+    headers: {
+      "x-username": en_user,
+      "x-password": oldEnPw,
+    },
+  })
     .then((response) => {
       if (response.status !== 200) {
         console.log(response);
@@ -50,17 +48,18 @@ export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, 
     .then((json) => {
       const updated_pws = json.map((p) => encryptPw(newPlaintextPw, decryptPw(oldPlaintextPw, p)));
       console.log("got to", updated_pws);
-      return fetch(
-        `${backend}/api/v1/post/updateuser?username=${encodeURIComponent(
-          en_user
-        )}&password=${encodeURIComponent(oldEnPw)}&new_password=${encodeURIComponent(
-          newEnPw
-        )}`,
-        {
-          method: "POST",
-          body: JSON.stringify(updated_pws),
-        }
-      )
+      return fetch(`${backend}/api/v2/user`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-username": en_user,
+          "x-password": oldEnPw,
+        },
+        body: JSON.stringify({
+          new_password: newEnPw,
+          passwords: updated_pws,
+        }),
+      })
         .then((response) => {
           console.log("Still fetching");
           if (response.status !== 200) {

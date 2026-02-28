@@ -27,13 +27,13 @@ export function QueryPassword({
     if (newKey !== null) {
       if (!(newKey in kvs)) {
         fetch(
-          `${backend}/api/v1/get/getpw/${encodeURIComponent(
-            newKey
-          )}?username=${encodeURIComponent(
-            en_user
-          )}&password=${encodeURIComponent(en_pw)}`,
+          `${backend}/api/v2/passwords/${encodeURIComponent(newKey)}`,
           {
-            method: "GET"
+            method: "GET",
+            headers: {
+              "x-username": en_user,
+              "x-password": en_pw,
+            },
           }
         )
           .then((response) => {
@@ -223,7 +223,7 @@ export function NewPassword({
       setErrorMsg("You already have a key of this name!");
     }
     showLoader();
-    fetch(`${backend}/api/v1/get/newpw`, {
+    fetch(`${backend}/api/v2/generate`, {
       method: "GET"
     })
       .then((response) => {
@@ -235,15 +235,15 @@ export function NewPassword({
       })
       .then((pwval) => {
         fetch(
-          `${backend}/api/v1/post/newpw/${encodeURIComponent(
-            key
-          )}?username=${encodeURIComponent(
-            en_user
-          )}&password=${encodeURIComponent(en_pw)}&pwval=${encodeURIComponent(
-            encryptPw(password, pwval)
-          )}`,
+          `${backend}/api/v2/passwords/${encodeURIComponent(key)}`,
           {
-            method: "POST"
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-username": en_user,
+              "x-password": en_pw,
+            },
+            body: JSON.stringify({ encrypted_password: encryptPw(password, pwval) }),
           }
         ).then((response) => {
           if (response.status !== 200) {

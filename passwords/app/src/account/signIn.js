@@ -42,15 +42,14 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     showLoader();
     fetch(
       isCreatingAccount
-        ? `${backend}/api/v1/post/newuser?username=${encodeURIComponent(
-            submittedUser
-          )}&password=${encodeURIComponent(submittedPw)}`
-        : `${backend}/api/v1/get/verifyuser?username=${encodeURIComponent(
-            submittedUser
-          )}&password=${encodeURIComponent(submittedPw)}`,
+        ? `${backend}/api/v2/user`
+        : `${backend}/api/v2/user/verify`,
       {
         method: isCreatingAccount ? "POST" : "GET",
-        headers: { "Content-Type": "text/plain" },
+        headers: {
+          "x-username": submittedUser,
+          "x-password": submittedPw,
+        },
       }
     )
       .then((response) => {

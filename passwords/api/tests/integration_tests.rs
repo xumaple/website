@@ -27,7 +27,7 @@
 use mongodb::bson::oid::ObjectId;
 use passwords::build_rocket;
 use passwords::db;
-use rocket::http::{ContentType, Status};
+use rocket::http::{ContentType, Header, Status};
 use rocket::local::asynchronous::Client;
 use std::sync::LazyLock;
 
@@ -58,6 +58,21 @@ static TEST_CLIENT: LazyLock<Client> = LazyLock::new(|| {
 /// Returns the shared Rocket client, initializing DB + client on first call.
 fn client() -> &'static Client {
     &TEST_CLIENT
+}
+
+// ---------------------------------------------------------------------------
+// WithAuth: extension trait for attaching credentials to test requests.
+// ---------------------------------------------------------------------------
+
+trait WithAuth {
+    fn auth(self, user: &str, pw: &str) -> Self;
+}
+
+impl<'c> WithAuth for rocket::local::asynchronous::LocalRequest<'c> {
+    fn auth(self, user: &str, pw: &str) -> Self {
+        self.header(Header::new("x-username", user.to_string()))
+            .header(Header::new("x-password", pw.to_string()))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +109,7 @@ impl Drop for TestUser {
         // the RT.block_on() that is driving the test body.
         std::thread::spawn(move || {
             handle.block_on(async {
-                let _ = db::delete_user(&username).await;
+                let _ = db::delete_user(username).await;
             });
         })
         .join()
@@ -139,7 +154,7 @@ fn test_root() {
 fn test_generate_password() {
     run(async {
         let c = client();
-        let res = c.get("/api/v1/get/newpw").dispatch().await;
+        let res = c.get("/api/v2/generate").dispatch().await;
         assert_eq!(res.status(), Status::Ok);
         let pw: String = parse_json(&res.into_string().await.unwrap());
         assert_eq!(pw.len(), 15); // PASSWORD_LEN
@@ -157,36 +172,32 @@ fn test_full_user_lifecycle() {
 
         // 1. Create user
         let res = c
-            .post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+            .post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "create user");
 
         // 2. Verify user
         let res = c
-            .get(format!(
-                "/api/v1/get/verifyuser?username={user}&password={pw}"
-            ))
+            .get("/api/v2/user/verify")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "verify user");
 
         // 3. Wrong password → 404
         let res = c
-            .get(format!(
-                "/api/v1/get/verifyuser?username={user}&password=wrong"
-            ))
+            .get("/api/v2/user/verify")
+            .auth(user, "wrong")
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "wrong password");
 
         // 4. Keys should be empty
         let res = c
-            .get(format!(
-                "/api/v1/get/getkeys?username={user}&password={pw}"
-            ))
+            .get("/api/v2/keys")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok);
@@ -196,9 +207,10 @@ fn test_full_user_lifecycle() {
         // 5. Add passwords
         for (key, val) in [("gmail", "enc_gmail"), ("github", "enc_github")] {
             let res = c
-                .post(format!(
-                    "/api/v1/post/newpw/{key}?username={user}&password={pw}&pwval={val}"
-                ))
+                .post(format!("/api/v2/passwords/{key}"))
+                .auth(user, pw)
+                .header(ContentType::JSON)
+                .body(format!(r#"{{"encrypted_password":"{val}"}}"#))
                 .dispatch()
                 .await;
             assert_eq!(res.status(), Status::Ok, "add {key}");
@@ -206,9 +218,8 @@ fn test_full_user_lifecycle() {
 
         // 6. Keys should have 2
         let res = c
-            .get(format!(
-                "/api/v1/get/getkeys?username={user}&password={pw}"
-            ))
+            .get("/api/v2/keys")
+            .auth(user, pw)
             .dispatch()
             .await;
         let keys: Vec<String> = parse_json(&res.into_string().await.unwrap());
@@ -218,9 +229,8 @@ fn test_full_user_lifecycle() {
 
         // 7. Get individual password
         let res = c
-            .get(format!(
-                "/api/v1/get/getpw/gmail?username={user}&password={pw}"
-            ))
+            .get("/api/v2/passwords/gmail")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(
@@ -230,9 +240,8 @@ fn test_full_user_lifecycle() {
 
         // 8. Get all passwords
         let res = c
-            .get(format!(
-                "/api/v1/get/getpws?username={user}&password={pw}"
-            ))
+            .get("/api/v2/passwords")
+            .auth(user, pw)
             .dispatch()
             .await;
         let all: Vec<String> = parse_json(&res.into_string().await.unwrap());
@@ -240,17 +249,17 @@ fn test_full_user_lifecycle() {
 
         // 9. Change a stored password
         let res = c
-            .post(format!(
-                "/api/v1/post/changepw/gmail?username={user}&password={pw}&pwval=new_gmail"
-            ))
+            .put("/api/v2/passwords/gmail")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"new_gmail"}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "change stored pw");
 
         let res = c
-            .get(format!(
-                "/api/v1/get/getpw/gmail?username={user}&password={pw}"
-            ))
+            .get("/api/v2/passwords/gmail")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(
@@ -261,38 +270,36 @@ fn test_full_user_lifecycle() {
         // 10. Change master password
         let new_pw = "new_master_password_xyz";
         let res = c
-            .post(format!(
-                "/api/v1/post/updateuser?username={user}&password={pw}&new_password={new_pw}"
-            ))
+            .put("/api/v2/user")
+            .auth(user, pw)
             .header(ContentType::JSON)
-            .body(r#"["reenc_gmail","reenc_github"]"#)
+            .body(format!(
+                r#"{{"new_password":"{new_pw}","passwords":["reenc_gmail","reenc_github"]}}"#
+            ))
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "change master");
 
         // 11. Old password fails
         let res = c
-            .get(format!(
-                "/api/v1/get/verifyuser?username={user}&password={pw}"
-            ))
+            .get("/api/v2/user/verify")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "old pw rejected");
 
         // 12. New password works
         let res = c
-            .get(format!(
-                "/api/v1/get/verifyuser?username={user}&password={new_pw}"
-            ))
+            .get("/api/v2/user/verify")
+            .auth(user, new_pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "new pw accepted");
 
         // 13. Passwords re-encrypted
         let res = c
-            .get(format!(
-                "/api/v1/get/getpw/gmail?username={user}&password={new_pw}"
-            ))
+            .get("/api/v2/passwords/gmail")
+            .auth(user, new_pw)
             .dispatch()
             .await;
         assert_eq!(
@@ -312,17 +319,15 @@ fn test_duplicate_user_rejected() {
         let (user, pw) = (t.user(), t.pw());
 
         let res = c
-            .post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+            .post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok);
 
         let res = c
-            .post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+            .post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "duplicate user rejected");
@@ -336,24 +341,25 @@ fn test_duplicate_key_rejected() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         let res = c
-            .post(format!(
-                "/api/v1/post/newpw/mykey?username={user}&password={pw}&pwval=v1"
-            ))
+            .post("/api/v2/passwords/mykey")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"v1"}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok);
 
         let res = c
-            .post(format!(
-                "/api/v1/post/newpw/mykey?username={user}&password={pw}&pwval=v2"
-            ))
+            .post("/api/v2/passwords/mykey")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"v2"}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "duplicate key rejected");
@@ -367,16 +373,14 @@ fn test_nonexistent_key_returns_error() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         let res = c
-            .get(format!(
-                "/api/v1/get/getpw/bogus?username={user}&password={pw}"
-            ))
+            .get("/api/v2/passwords/bogus")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "nonexistent key → 404");
@@ -390,25 +394,24 @@ fn test_change_master_password_mismatched_count() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
-        c.post(format!(
-                "/api/v1/post/newpw/site?username={user}&password={pw}&pwval=enc"
-            ))
+        c.post("/api/v2/passwords/site")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"enc"}"#)
             .dispatch()
             .await;
 
         // 0 re-encrypted passwords instead of 1
         let res = c
-            .post(format!(
-                "/api/v1/post/updateuser?username={user}&password={pw}&new_password=newpw"
-            ))
+            .put("/api/v2/user")
+            .auth(user, pw)
             .header(ContentType::JSON)
-            .body("[]")
+            .body(r#"{"new_password":"newpw","passwords":[]}"#)
             .dispatch()
             .await;
         assert_eq!(
@@ -428,9 +431,8 @@ fn test_nonexistent_user_verify() {
         let (user, pw) = (t.user(), t.pw());
 
         let res = c
-            .get(format!(
-                "/api/v1/get/verifyuser?username={user}&password={pw}"
-            ))
+            .get("/api/v2/user/verify")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "verify nonexistent user");
@@ -445,9 +447,8 @@ fn test_nonexistent_user_get_keys() {
         let (user, pw) = (t.user(), t.pw());
 
         let res = c
-            .get(format!(
-                "/api/v1/get/getkeys?username={user}&password={pw}"
-            ))
+            .get("/api/v2/keys")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "getkeys nonexistent user");
@@ -461,16 +462,16 @@ fn test_wrong_password_on_add_stored_password() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         let res = c
-            .post(format!(
-                "/api/v1/post/newpw/key1?username={user}&password=wrongpw&pwval=v1"
-            ))
+            .post("/api/v2/passwords/key1")
+            .auth(user, "wrongpw")
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"v1"}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "wrong pw on add stored pw");
@@ -484,22 +485,23 @@ fn test_wrong_password_on_change_stored_password() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
-        c.post(format!(
-                "/api/v1/post/newpw/key1?username={user}&password={pw}&pwval=v1"
-            ))
+        c.post("/api/v2/passwords/key1")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"v1"}"#)
             .dispatch()
             .await;
 
         let res = c
-            .post(format!(
-                "/api/v1/post/changepw/key1?username={user}&password=wrongpw&pwval=v2"
-            ))
+            .put("/api/v2/passwords/key1")
+            .auth(user, "wrongpw")
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"v2"}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "wrong pw on change stored pw");
@@ -513,18 +515,16 @@ fn test_wrong_password_on_change_master() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         let res = c
-            .post(format!(
-                "/api/v1/post/updateuser?username={user}&password=wrongpw&new_password=newpw"
-            ))
+            .put("/api/v2/user")
+            .auth(user, "wrongpw")
             .header(ContentType::JSON)
-            .body("[]")
+            .body(r#"{"new_password":"newpw","passwords":[]}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "wrong pw on change master");
@@ -538,16 +538,16 @@ fn test_change_nonexistent_stored_password_key() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         let res = c
-            .post(format!(
-                "/api/v1/post/changepw/nokey?username={user}&password={pw}&pwval=v"
-            ))
+            .put("/api/v2/passwords/nokey")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"v"}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "change nonexistent key");
@@ -561,17 +561,15 @@ fn test_get_passwords_empty() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         // getpws on user with no stored passwords
         let res = c
-            .get(format!(
-                "/api/v1/get/getpws?username={user}&password={pw}"
-            ))
+            .get("/api/v2/passwords")
+            .auth(user, pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok);
@@ -584,8 +582,8 @@ fn test_get_passwords_empty() {
 fn test_generated_passwords_are_unique() {
     run(async {
         let c = client();
-        let res1 = c.get("/api/v1/get/newpw").dispatch().await;
-        let res2 = c.get("/api/v1/get/newpw").dispatch().await;
+        let res1 = c.get("/api/v2/generate").dispatch().await;
+        let res2 = c.get("/api/v2/generate").dispatch().await;
         let pw1: String = parse_json(&res1.into_string().await.unwrap());
         let pw2: String = parse_json(&res2.into_string().await.unwrap());
         assert_ne!(pw1, pw2, "generated passwords should differ");
@@ -608,25 +606,24 @@ fn test_change_master_password_too_many_passwords() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
-        c.post(format!(
-                "/api/v1/post/newpw/only?username={user}&password={pw}&pwval=enc"
-            ))
+        c.post("/api/v2/passwords/only")
+            .auth(user, pw)
+            .header(ContentType::JSON)
+            .body(r#"{"encrypted_password":"enc"}"#)
             .dispatch()
             .await;
 
         // 2 re-encrypted passwords instead of 1
         let res = c
-            .post(format!(
-                "/api/v1/post/updateuser?username={user}&password={pw}&new_password=newpw"
-            ))
+            .put("/api/v2/user")
+            .auth(user, pw)
             .header(ContentType::JSON)
-            .body(r#"["a","b"]"#)
+            .body(r#"{"new_password":"newpw","passwords":["a","b"]}"#)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::NotFound, "too many passwords rejected");
@@ -640,29 +637,28 @@ fn test_change_master_no_stored_passwords() {
         let t = TestUser::new();
         let (user, pw) = (t.user(), t.pw());
 
-        c.post(format!(
-                "/api/v1/post/newuser?username={user}&password={pw}"
-            ))
+        c.post("/api/v2/user")
+            .auth(user, pw)
             .dispatch()
             .await;
 
         // Change master when there are zero stored passwords — should succeed with empty array
         let new_pw = "brand_new_pw";
         let res = c
-            .post(format!(
-                "/api/v1/post/updateuser?username={user}&password={pw}&new_password={new_pw}"
-            ))
+            .put("/api/v2/user")
+            .auth(user, pw)
             .header(ContentType::JSON)
-            .body("[]")
+            .body(format!(
+                r#"{{"new_password":"{new_pw}","passwords":[]}}"#
+            ))
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "change master with no stored pws");
 
         // Verify new password works
         let res = c
-            .get(format!(
-                "/api/v1/get/verifyuser?username={user}&password={new_pw}"
-            ))
+            .get("/api/v2/user/verify")
+            .auth(user, new_pw)
             .dispatch()
             .await;
         assert_eq!(res.status(), Status::Ok, "new pw works after master change");
