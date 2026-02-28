@@ -5,7 +5,7 @@ pub mod db;
 pub mod encrypt;
 
 use db::DbError;
-use encrypt::{generate_password, CryptoError};
+use encrypt::{generate_password, Credentials, CryptoError};
 use rocket::{
     fairing::{Fairing, Info, Kind},
     http::{Header, Status},
@@ -107,11 +107,6 @@ fn cors_preflight() -> Status {
 // Request guard: extract credentials from headers
 // ---------------------------------------------------------------------------
 
-pub struct Credentials {
-    pub username: String,
-    pub password: String,
-}
-
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for Credentials {
     type Error = ();
@@ -156,13 +151,13 @@ fn generate() -> Result<JsonResponse<String>, Error> {
 
 #[post("/user")]
 async fn create_user(creds: Credentials) -> Result<Response, Error> {
-    db::add_user(creds.username, creds.password).await?;
+    db::add_user(creds).await?;
     Response::Ok()
 }
 
 #[get("/user/verify")]
 async fn verify_user(creds: Credentials) -> Result<Response, Error> {
-    db::verify_user(creds.username, creds.password).await?;
+    db::verify_user(creds).await?;
     Response::Ok()
 }
 
@@ -172,47 +167,47 @@ async fn update_user(
     payload: Json<UpdateUserPayload>,
 ) -> Result<Response, Error> {
     let p = payload.into_inner();
-    db::change_master_password(creds.username, creds.password, p.new_password, p.passwords)
+    db::change_master_password(creds, p.new_password, p.passwords)
         .await?;
     Response::Ok()
 }
 
 #[get("/keys")]
 async fn get_stored_keys(creds: Credentials) -> Result<JsonResponse<Vec<String>>, Error> {
-    JsonResponse::Ok(db::get_stored_keys(creds.username, creds.password).await?)
+    JsonResponse::Ok(db::get_stored_keys(creds).await?)
 }
 
-#[get("/passwords/<pwkey>")]
+#[get("/passwords/<key>")]
 async fn get_stored_password(
     creds: Credentials,
-    pwkey: String,
+    key: String,
 ) -> Result<JsonResponse<String>, Error> {
-    JsonResponse::Ok(db::get_stored_password(creds.username, creds.password, pwkey).await?)
+    JsonResponse::Ok(db::get_stored_password(creds, key).await?)
 }
 
 #[get("/passwords")]
 async fn get_stored_passwords(creds: Credentials) -> Result<JsonResponse<Vec<String>>, Error> {
-    JsonResponse::Ok(db::get_stored_passwords(creds.username, creds.password).await?)
+    JsonResponse::Ok(db::get_stored_passwords(creds).await?)
 }
 
-#[post("/passwords/<pwkey>", data = "<payload>")]
+#[post("/passwords/<key>", data = "<payload>")]
 async fn add_stored_password(
     creds: Credentials,
-    pwkey: String,
+    key: String,
     payload: Json<PasswordPayload>,
 ) -> Result<Response, Error> {
-    db::add_stored_password(creds.username, creds.password, pwkey, payload.into_inner().encrypted_password)
+    db::add_stored_password(creds, key, payload.into_inner().encrypted_password)
         .await?;
     Response::Ok()
 }
 
-#[put("/passwords/<pwkey>", data = "<payload>")]
+#[put("/passwords/<key>", data = "<payload>")]
 async fn change_stored_password(
     creds: Credentials,
-    pwkey: String,
+    key: String,
     payload: Json<PasswordPayload>,
 ) -> Result<Response, Error> {
-    db::change_stored_password(creds.username, creds.password, pwkey, payload.into_inner().encrypted_password)
+    db::change_stored_password(creds, key, payload.into_inner().encrypted_password)
         .await?;
     Response::Ok()
 }
@@ -226,7 +221,7 @@ async fn root() -> String {
 #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
 #[delete("/user")]
 async fn delete_user(creds: Credentials) -> Result<Response, Error> {
-    db::delete_user(&creds.username).await?;
+    db::delete_user(creds.username).await?;
     Response::Ok()
 }
 

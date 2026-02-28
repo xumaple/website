@@ -109,7 +109,7 @@ impl Drop for TestUser {
         // the RT.block_on() that is driving the test body.
         std::thread::spawn(move || {
             handle.block_on(async {
-                let _ = db::delete_user(&username).await;
+                let _ = db::delete_user(username).await;
             });
         })
         .join()

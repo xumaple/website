@@ -1,4 +1,4 @@
-use crate::encrypt::{user2oid, CryptoError, MasterKey};
+use crate::encrypt::{user2oid, Credentials, CryptoError, MasterKey};
 use mongodb::{
     bson::{doc, oid::ObjectId, to_bson, Bson},
     error::Error as MongoError,
@@ -69,27 +69,26 @@ pub async fn connect() -> Result<(), DbError> {
 }
 
 async fn authenticate_user(
-    username: &str,
-    password: String,
+    creds: Credentials,
 ) -> Result<(&'static Collection<User>, User, OID), DbError> {
     let db = DB.get().unwrap();
-    let en_user = user2oid(username);
-    let user = find_user(username, en_user).await?;
-    user.master_key.verify(&password)?;
+    let en_user = user2oid(&creds.username);
+    let user = find_user(&creds.username, en_user).await?;
+    user.master_key.verify(&creds.password)?;
     Ok((db, user, en_user))
 }
 
-pub async fn add_user(username: String, password: String) -> Result<(), DbError> {
+pub async fn add_user(creds: Credentials) -> Result<(), DbError> {
     let db = DB.get().unwrap();
 
-    let en_user = user2oid(&username);
-    if find_user(&username, en_user).await.is_ok() {
+    let en_user = user2oid(&creds.username);
+    if find_user(&creds.username, en_user).await.is_ok() {
         return Err(DbError::GenericError {
             error_msg: "Cannot add user because username already exists".to_owned(),
         });
     }
 
-    let master_key = MasterKey::new(password)?;
+    let master_key = MasterKey::new(&creds.password)?;
 
     db.insert_one(
         &User {
@@ -103,8 +102,8 @@ pub async fn add_user(username: String, password: String) -> Result<(), DbError>
     Ok(())
 }
 
-pub async fn verify_user(username: String, password: String) -> Result<(), DbError> {
-    let _ = authenticate_user(&username, password).await?;
+pub async fn verify_user(creds: Credentials) -> Result<(), DbError> {
+    let _ = authenticate_user(creds).await?;
     Ok(())
 }
 
@@ -126,33 +125,29 @@ pub async fn find_user(username: &str, en_user: OID) -> Result<User, DbError> {
     }
 }
 
-pub async fn get_stored_keys(username: String, password: String) -> Result<Vec<String>, DbError> {
-    let (_, user, _) = authenticate_user(&username, password).await?;
+pub async fn get_stored_keys(creds: Credentials) -> Result<Vec<String>, DbError> {
+    let (_, user, _) = authenticate_user(creds).await?;
     Ok(user.stored_passwords.into_iter().map(|kv| kv.key).collect())
 }
 
 pub async fn get_stored_password(
-    username: String,
-    password: String,
-    pwkey: String,
+    creds: Credentials,
+    key: String,
 ) -> Result<String, DbError> {
-    let (_, user, _) = authenticate_user(&username, password).await?;
-    Ok(user
-        .stored_passwords
-        .iter()
-        .find(|kv| pwkey == kv.key)
+    let (_, user, _) = authenticate_user(creds).await?;
+    user.stored_passwords
+        .into_iter()
+        .find(|kv| key == kv.key)
+        .map(|kv| kv.en_password)
         .ok_or_else(|| DbError::GenericError {
-            error_msg: format!("Unable to find key {}", pwkey),
-        })?
-        .en_password
-        .clone())
+            error_msg: format!("Unable to find key {}", key),
+        })
 }
 
 pub async fn get_stored_passwords(
-    username: String,
-    password: String,
+    creds: Credentials,
 ) -> Result<Vec<String>, DbError> {
-    let (_, user, _) = authenticate_user(&username, password).await?;
+    let (_, user, _) = authenticate_user(creds).await?;
     Ok(user
         .stored_passwords
         .into_iter()
@@ -161,20 +156,19 @@ pub async fn get_stored_passwords(
 }
 
 pub async fn add_stored_password(
-    username: String,
-    password: String,
-    pwkey: String,
-    pwval: String,
+    creds: Credentials,
+    key: String,
+    encrypted_password: String,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(&username, password).await?;
+    let (db, user, en_user) = authenticate_user(creds).await?;
 
     if user
         .stored_passwords
         .iter()
-        .any(|u| u.key == pwkey)
+        .any(|u| u.key == key)
     {
         return Err(DbError::GenericError {
-            error_msg: format!("Key {} already exists", pwkey),
+            error_msg: format!("Key {} already exists", key),
         });
     }
 
@@ -185,7 +179,7 @@ pub async fn add_stored_password(
         doc! {
             "$push": {
                 "stored_passwords": Bson::from(PasswordKV {
-                    key: pwkey, en_password: pwval
+                    key, en_password: encrypted_password
                 })
             }
         },
@@ -196,27 +190,26 @@ pub async fn add_stored_password(
 }
 
 pub async fn change_stored_password(
-    username: String,
-    password: String,
-    pwkey: String,
-    pwval: String,
+    creds: Credentials,
+    key: String,
+    encrypted_password: String,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(&username, password).await?;
+    let (db, user, en_user) = authenticate_user(creds).await?;
 
     user.stored_passwords
         .into_iter()
-        .find(|u| u.key == pwkey)
-        .ok_or(DbError::GenericError {
-            error_msg: format!("Key {} doesn't exist", pwkey),
+        .find(|u| u.key == key)
+        .ok_or_else(|| DbError::GenericError {
+            error_msg: format!("Key {} doesn't exist", key),
         })?;
 
     db.update_one(
         doc! {
-            "_id": en_user, "stored_passwords.key": pwkey
+            "_id": en_user, "stored_passwords.key": key
         },
         doc! {
             "$set": {
-                "stored_passwords.$.en_password": pwval
+                "stored_passwords.$.en_password": encrypted_password
             }
         },
     )
@@ -226,12 +219,11 @@ pub async fn change_stored_password(
 }
 
 pub async fn change_master_password(
-    username: String,
-    password: String,
+    creds: Credentials,
     new_password: String,
     updated_stored_passwords: Vec<String>,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(&username, password).await?;
+    let (db, user, en_user) = authenticate_user(creds).await?;
 
     if user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
@@ -243,7 +235,7 @@ pub async fn change_master_password(
         });
     }
 
-    let new_mk = MasterKey::new(new_password)?;
+    let new_mk = MasterKey::new(&new_password)?;
 
     db.update_one(
         doc! {
@@ -267,9 +259,9 @@ pub async fn change_master_password(
 
 /// Deletes a user by username. Only available in debug/test builds.
 #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
-pub async fn delete_user(username: &str) -> Result<(), DbError> {
+pub async fn delete_user(username: String) -> Result<(), DbError> {
     let db = DB.get().unwrap();
-    let en_user = user2oid(username);
+    let en_user = user2oid(&username);
     db.delete_one(doc! { "_id": en_user }).await?;
     Ok(())
 }
@@ -318,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_master_key_into_bson() {
-        let mk = MasterKey::new("test_password".to_string()).unwrap();
+        let mk = MasterKey::new("test_password").unwrap();
         let original_pw = mk.master_pw.clone();
         let original_salt = mk.salt.clone();
         
@@ -336,7 +328,7 @@ mod tests {
     fn test_user_serialization() {
         let user = User {
             en_user: OID::from_bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
-            master_key: MasterKey::new("password".to_string()).unwrap(),
+            master_key: MasterKey::new("password").unwrap(),
             stored_passwords: vec![
                 PasswordKV {
                     key: "site1".to_string(),

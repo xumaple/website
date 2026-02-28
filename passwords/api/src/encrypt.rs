@@ -38,6 +38,12 @@ pub enum CryptoError {
     PasswordError { error_msg: &'static str },
 }
 
+/// Credentials extracted from request headers.
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+}
+
 fn generate_salt() -> Result<String, CryptoError> {
     let mut salt = [0u8; SHA256_SALT_LENGTH];
     let rng = rand::SystemRandom::new();
@@ -48,13 +54,13 @@ fn generate_salt() -> Result<String, CryptoError> {
 
 /// Represents a master key before hashing. Cannot be stored or verified against.
 /// Must be converted to [MasterKey] via [encrypt()] before use.
-pub struct UnencryptedMasterKey {
-    password: String,
+pub struct UnencryptedMasterKey<'a> {
+    password: &'a str,
     salt: String,
 }
 
-impl UnencryptedMasterKey {
-    pub fn new(password: String) -> Result<Self, CryptoError> {
+impl<'a> UnencryptedMasterKey<'a> {
+    pub fn new(password: &'a str) -> Result<Self, CryptoError> {
         Ok(Self {
             password,
             salt: generate_salt()?,
@@ -91,7 +97,7 @@ pub struct MasterKey {
 impl MasterKey {
     /// Creates an encrypted [MasterKey] from a plaintext password.
     /// Internally creates an [UnencryptedMasterKey] and encrypts it.
-    pub fn new(password: String) -> Result<MasterKey, CryptoError> {
+    pub fn new(password: &str) -> Result<MasterKey, CryptoError> {
         UnencryptedMasterKey::new(password)?.encrypt()
     }
 
@@ -137,8 +143,8 @@ mod tests {
 
     #[test]
     fn test_unencrypted_master_key_new_stores_password() {
-        let password = "test_password".to_string();
-        let uk = UnencryptedMasterKey::new(password.clone()).unwrap();
+        let password = "test_password";
+        let uk = UnencryptedMasterKey::new(password).unwrap();
         
         assert_eq!(uk.password, password);
         assert!(!uk.salt.is_empty());
@@ -148,9 +154,8 @@ mod tests {
 
     #[test]
     fn test_unencrypted_master_key_generates_unique_salts() {
-        let password = "test_password".to_string();
-        let uk1 = UnencryptedMasterKey::new(password.clone()).unwrap();
-        let uk2 = UnencryptedMasterKey::new(password.clone()).unwrap();
+        let uk1 = UnencryptedMasterKey::new("test_password").unwrap();
+        let uk2 = UnencryptedMasterKey::new("test_password").unwrap();
         
         // Each key should have a unique salt
         assert_ne!(uk1.salt, uk2.salt);
@@ -158,8 +163,8 @@ mod tests {
 
     #[test]
     fn test_unencrypted_master_key_encrypt_produces_hashed_key() {
-        let password = "test_password".to_string();
-        let uk = UnencryptedMasterKey::new(password.clone()).unwrap();
+        let password = "test_password";
+        let uk = UnencryptedMasterKey::new(password).unwrap();
         let original_salt = uk.salt.clone();
         
         let mk = uk.encrypt().unwrap();
@@ -174,8 +179,8 @@ mod tests {
 
     #[test]
     fn test_master_key_new_returns_encrypted_key() {
-        let password = "test_password".to_string();
-        let mk = MasterKey::new(password.clone()).unwrap();
+        let password = "test_password";
+        let mk = MasterKey::new(password).unwrap();
         
         assert_ne!(mk.master_pw, password);
         assert_eq!(mk.master_pw.len(), SHA512_OUTPUT_LEN * 2);
@@ -184,7 +189,7 @@ mod tests {
     #[test]
     fn test_master_key_verify_succeeds_with_correct_password() {
         let password = "correct_password";
-        let mk = MasterKey::new(password.to_string()).unwrap();
+        let mk = MasterKey::new(password).unwrap();
         
         let result = mk.verify(password);
         
@@ -193,8 +198,7 @@ mod tests {
 
     #[test]
     fn test_master_key_verify_fails_with_incorrect_password() {
-        let password = "correct_password".to_string();
-        let mk = MasterKey::new(password).unwrap();
+        let mk = MasterKey::new("correct_password").unwrap();
         
         let result = mk.verify("wrong_password");
         
@@ -214,7 +218,7 @@ mod tests {
         ];
 
         for password in test_passwords {
-            let mk = MasterKey::new(password.to_string()).unwrap();
+            let mk = MasterKey::new(password).unwrap();
             
             assert!(
                 mk.verify(password).is_ok(),
@@ -312,7 +316,7 @@ mod tests {
     #[test]
     fn test_master_key_serialization_roundtrip() {
         let password = "test_password";
-        let mk = MasterKey::new(password.to_string()).unwrap();
+        let mk = MasterKey::new(password).unwrap();
         
         let serialized = serde_json::to_string(&mk).unwrap();
         let deserialized: MasterKey = serde_json::from_str(&serialized).unwrap();
