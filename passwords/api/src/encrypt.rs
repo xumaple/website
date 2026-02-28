@@ -1,6 +1,6 @@
 use crate::db::{OID, OID_LEN};
 use data_encoding::{DecodeError, HEXUPPER};
-use passwords::PasswordGenerator;
+use passwords_gen::PasswordGenerator;
 use ring::{
     digest::{digest, SHA1_FOR_LEGACY_USE_ONLY, SHA512_OUTPUT_LEN},
     pbkdf2::{self, Algorithm, PBKDF2_HMAC_SHA512},

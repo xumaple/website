@@ -36,8 +36,11 @@ jobs:
       - name: Run clippy
         run: cargo clippy -- -D warnings
 
-      - name: Run tests
-        run: cargo test
+      - name: Run unit tests
+        run: cargo test --lib
+
+      - name: Run integration tests
+        run: cargo test --test integration_tests --features test-helpers
 
   js-tests:
     name: JS Tests

@@ -5,12 +5,15 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+test-helpers = []
+
 [dependencies]
 data-encoding = "2.10"
 ring = "0.16.20"
 thiserror = "2.0"
 anyhow = "1.0"
-passwords = "3.1"
+passwords_gen = { version = "3.1", package = "passwords" }
 dotenv = "0.15"
 rocket = { version = "0.5.1", features = ["json"] }
 mongodb = "3.5"

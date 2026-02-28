@@ -265,6 +265,15 @@ pub async fn change_master_password(
     Ok(())
 }
 
+/// Deletes a user by username. Only available in debug/test builds.
+#[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+pub async fn delete_user(username: &str) -> Result<(), DbError> {
+    let db = DB.get().unwrap();
+    let en_user = user2oid(username);
+    db.delete_one(doc! { "_id": en_user }).await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
