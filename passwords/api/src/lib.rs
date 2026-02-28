@@ -7,11 +7,14 @@ pub mod encrypt;
 use db::DbError;
 use encrypt::{generate_password, CryptoError};
 use rocket::{
+    fairing::{Fairing, Info, Kind},
     http::{Header, Status},
+    request::{self, FromRequest},
     response::Responder,
     serde::json::Json,
     Request, Response as RocketResponse,
 };
+use serde::Deserialize;
 use std::io::Cursor;
 
 #[derive(thiserror::Error, Debug)]
@@ -34,7 +37,6 @@ impl<'r> Responder<'r, 'static> for Error {
 
         RocketResponse::build()
             .status(Status::NotFound)
-            .header(Header::new("Access-Control-Allow-Origin", "*"))
             .sized_body(simple_response.len(), Cursor::new(simple_response))
             .ok()
     }
@@ -43,7 +45,6 @@ impl<'r> Responder<'r, 'static> for Error {
 #[derive(Responder)]
 pub struct Response {
     status: Status,
-    cors: Header<'static>,
 }
 impl Response {
     #[allow(non_snake_case)]
@@ -51,7 +52,6 @@ impl Response {
         println!("Returning response Ok");
         Ok(Response {
             status: Status::Ok,
-            cors: Header::new("Access-Control-Allow-Origin", "*"),
         })
     }
 }
@@ -60,100 +60,160 @@ impl Response {
 #[response(status = 200, content_type = "json")]
 pub struct JsonResponse<T> {
     msg: Json<T>,
-    cors: Header<'static>,
 }
 impl<T> JsonResponse<T> {
     #[allow(non_snake_case)]
     pub fn Ok(json: T) -> Result<Self, Error> {
         println!("Returning response Ok");
-        Ok(JsonResponse {
-            msg: Json(json),
-            cors: Header::new("Access-Control-Allow-Origin", "*"),
-        })
+        Ok(JsonResponse { msg: Json(json) })
     }
 }
 
-#[get("/get/newpw")]
-fn new_password() -> Result<JsonResponse<String>, Error> {
+// ---------------------------------------------------------------------------
+// CORS fairing
+// ---------------------------------------------------------------------------
+
+pub struct Cors;
+
+#[rocket::async_trait]
+impl Fairing for Cors {
+    fn info(&self) -> Info {
+        Info {
+            name: "CORS",
+            kind: Kind::Response,
+        }
+    }
+
+    async fn on_response<'r>(&self, _req: &'r Request<'_>, res: &mut RocketResponse<'r>) {
+        res.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+        res.set_header(Header::new(
+            "Access-Control-Allow-Methods",
+            "GET, POST, PUT, DELETE, OPTIONS",
+        ));
+        res.set_header(Header::new(
+            "Access-Control-Allow-Headers",
+            "x-username, x-password, Content-Type",
+        ));
+    }
+}
+
+/// Catch-all OPTIONS handler for CORS preflight requests.
+#[options("/<_..>")]
+fn cors_preflight() -> Status {
+    Status::NoContent
+}
+
+// ---------------------------------------------------------------------------
+// Request guard: extract credentials from headers
+// ---------------------------------------------------------------------------
+
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for Credentials {
+    type Error = ();
+
+    async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        match (
+            req.headers().get_one("x-username"),
+            req.headers().get_one("x-password"),
+        ) {
+            (Some(u), Some(p)) => request::Outcome::Success(Credentials {
+                username: u.to_string(),
+                password: p.to_string(),
+            }),
+            _ => request::Outcome::Error((Status::Unauthorized, ())),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Request payloads
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct UpdateUserPayload {
+    pub new_password: String,
+    pub passwords: Vec<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PasswordPayload {
+    pub encrypted_password: String,
+}
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
+
+#[get("/generate")]
+fn generate() -> Result<JsonResponse<String>, Error> {
     JsonResponse::Ok(generate_password()?)
 }
 
-#[get("/get/verifyuser?<username>&<password>")]
-async fn verify_user(username: String, password: String) -> Result<Response, Error> {
-    db::verify_user(username, password).await?;
+#[post("/user")]
+async fn create_user(creds: Credentials) -> Result<Response, Error> {
+    db::add_user(creds.username, creds.password).await?;
     Response::Ok()
 }
 
-#[post("/post/newuser?<username>&<password>")]
-async fn create_user(username: String, password: String) -> Result<Response, Error> {
-    db::add_user(username, password).await?;
+#[get("/user/verify")]
+async fn verify_user(creds: Credentials) -> Result<Response, Error> {
+    db::verify_user(creds.username, creds.password).await?;
     Response::Ok()
 }
 
-#[post(
-    "/post/updateuser?<username>&<password>&<new_password>",
-    data = "<new_stored_passwords>"
-)]
+#[put("/user", data = "<payload>")]
 async fn update_user(
-    username: String,
-    password: String,
-    new_password: String,
-    new_stored_passwords: Json<Vec<String>>,
+    creds: Credentials,
+    payload: Json<UpdateUserPayload>,
 ) -> Result<Response, Error> {
-    db::change_master_password(
-        username,
-        password,
-        new_password,
-        new_stored_passwords.into_inner(),
-    )
-    .await?;
+    let p = payload.into_inner();
+    db::change_master_password(creds.username, creds.password, p.new_password, p.passwords)
+        .await?;
     Response::Ok()
 }
 
-#[get("/get/getkeys?<username>&<password>")]
-async fn get_stored_keys(
-    username: String,
-    password: String,
-) -> Result<JsonResponse<Vec<String>>, Error> {
-    JsonResponse::Ok(db::get_stored_keys(username, password).await?)
+#[get("/keys")]
+async fn get_stored_keys(creds: Credentials) -> Result<JsonResponse<Vec<String>>, Error> {
+    JsonResponse::Ok(db::get_stored_keys(creds.username, creds.password).await?)
 }
 
-#[get("/get/getpw/<pwkey>?<username>&<password>")]
+#[get("/passwords/<pwkey>")]
 async fn get_stored_password(
-    username: String,
-    password: String,
+    creds: Credentials,
     pwkey: String,
 ) -> Result<JsonResponse<String>, Error> {
-    JsonResponse::Ok(db::get_stored_password(username, password, pwkey).await?)
+    JsonResponse::Ok(db::get_stored_password(creds.username, creds.password, pwkey).await?)
 }
 
-#[get("/get/getpws?<username>&<password>")]
-async fn get_stored_passwords(
-    username: String,
-    password: String,
-) -> Result<JsonResponse<Vec<String>>, Error> {
-    JsonResponse::Ok(db::get_stored_passwords(username, password).await?)
+#[get("/passwords")]
+async fn get_stored_passwords(creds: Credentials) -> Result<JsonResponse<Vec<String>>, Error> {
+    JsonResponse::Ok(db::get_stored_passwords(creds.username, creds.password).await?)
 }
 
-#[post("/post/newpw/<pwkey>?<username>&<password>&<pwval>")]
+#[post("/passwords/<pwkey>", data = "<payload>")]
 async fn add_stored_password(
-    username: String,
-    password: String,
+    creds: Credentials,
     pwkey: String,
-    pwval: String,
+    payload: Json<PasswordPayload>,
 ) -> Result<Response, Error> {
-    db::add_stored_password(username, password, pwkey, pwval).await?;
+    db::add_stored_password(creds.username, creds.password, pwkey, payload.into_inner().encrypted_password)
+        .await?;
     Response::Ok()
 }
 
-#[post("/post/changepw/<pwkey>?<username>&<password>&<pwval>")]
+#[put("/passwords/<pwkey>", data = "<payload>")]
 async fn change_stored_password(
-    username: String,
-    password: String,
+    creds: Credentials,
     pwkey: String,
-    pwval: String,
+    payload: Json<PasswordPayload>,
 ) -> Result<Response, Error> {
-    db::change_stored_password(username, password, pwkey, pwval).await?;
+    db::change_stored_password(creds.username, creds.password, pwkey, payload.into_inner().encrypted_password)
+        .await?;
     Response::Ok()
 }
 
@@ -162,20 +222,25 @@ async fn root() -> String {
     "Don't get hacked".to_owned()
 }
 
-/// Delete a user by username. Only available in debug/test builds for cleanup.
+/// Delete a user. Only available in debug/test builds for cleanup.
 #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
-#[post("/post/deleteuser?<username>")]
-async fn delete_user(username: String) -> Result<Response, Error> {
-    db::delete_user(&username).await?;
+#[delete("/user")]
+async fn delete_user(creds: Credentials) -> Result<Response, Error> {
+    db::delete_user(&creds.username).await?;
     Response::Ok()
 }
 
+// ---------------------------------------------------------------------------
+// Application builder
+// ---------------------------------------------------------------------------
+
 pub fn build_rocket() -> rocket::Rocket<rocket::Build> {
     let rocket = rocket::build()
+        .attach(Cors)
         .mount(
-            "/api/v1",
+            "/api/v2",
             routes![
-                new_password,
+                generate,
                 create_user,
                 verify_user,
                 update_user,
@@ -186,10 +251,10 @@ pub fn build_rocket() -> rocket::Rocket<rocket::Build> {
                 change_stored_password,
             ],
         )
-        .mount("/", routes![root]);
+        .mount("/", routes![root, cors_preflight]);
 
     #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
-    let rocket = rocket.mount("/api/v1", routes![delete_user]);
+    let rocket = rocket.mount("/api/v2", routes![delete_user]);
 
     rocket
 }

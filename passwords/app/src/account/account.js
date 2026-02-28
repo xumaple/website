@@ -46,14 +46,13 @@ export default function Account({
   useEffect(() => {
     if (keys === undefined) {
       showLoader();
-      fetch(
-        `${backend}/api/v1/get/getkeys?username=${encodeURIComponent(
-          en_user
-        )}&password=${encodeURIComponent(currEnPw)}`,
-        {
-          method: "GET"
-        }
-      )
+      fetch(`${backend}/api/v2/keys`, {
+        method: "GET",
+        headers: {
+          "x-username": en_user,
+          "x-password": currEnPw,
+        },
+      })
         .then((response) => {
           if (response.status !== 200) {
             console.log(response);

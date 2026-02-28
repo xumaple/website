@@ -76,13 +76,15 @@ let PasswordInput = ({
     setCurrentlyUploading(true);
 
     fetch(
-      `${backend}/api/v1/post/newpw/${encodeURIComponent(
-        key
-      )}?username=${encodeURIComponent(en_user)}&password=${encodeURIComponent(
-        en_pw
-      )}&pwval=${encodeURIComponent(encryptPw(password, pw))}`,
+      `${backend}/api/v2/passwords/${encodeURIComponent(key)}`,
       {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-username": en_user,
+          "x-password": en_pw,
+        },
+        body: JSON.stringify({ encrypted_password: encryptPw(password, pw) }),
       }
     )
       .then((response) => {

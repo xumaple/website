@@ -67,10 +67,12 @@ test.describe.serial("Full user journey", () => {
     // The delete endpoint expects the same SHA3-hashed username that the
     // frontend sends during sign-up / login. We captured it in the create step.
     if (ctx.hashedUsername) {
-      const encoded = encodeURIComponent(ctx.hashedUsername);
-      await request.post(
-        `${API}/api/v1/post/deleteuser?username=${encoded}`
-      );
+      await request.delete(`${API}/api/v2/user`, {
+        headers: {
+          "x-username": ctx.hashedUsername,
+          "x-password": "unused",
+        },
+      });
     }
     await page.close();
   });
@@ -96,17 +98,17 @@ test.describe.serial("Full user journey", () => {
 
     // Intercept the sign-up request to capture the SHA3-hashed username the
     // frontend sends to the API. We need this for cleanup in afterAll.
-    const signupPromise = page.waitForRequest((req) =>
-      req.url().includes("/api/v1/post/newuser")
+    const signupPromise = page.waitForRequest(
+      (req) =>
+        req.url().endsWith("/api/v2/user") && req.method() === "POST"
     );
 
     // Submit.
     await page.getByRole("button", { name: "Sign up" }).click();
 
-    // Extract the hashed username from the request URL.
+    // Extract the hashed username from the request headers.
     const signupReq = await signupPromise;
-    const url = new URL(signupReq.url());
-    ctx.hashedUsername = url.searchParams.get("username");
+    ctx.hashedUsername = signupReq.headers()["x-username"];
 
     // After successful sign-up we land on the account view which shows
     // "Select a password to retrieve:" in the query view.
@@ -132,7 +134,7 @@ test.describe.serial("Full user journey", () => {
     // generated password value before it gets AES-encrypted.
     const newPwPromise = page.waitForResponse(
       (resp) =>
-        resp.url().includes("/api/v1/get/newpw") && resp.status() === 200
+        resp.url().includes("/api/v2/generate") && resp.status() === 200
     );
 
     // Click "Generate".
@@ -298,7 +300,7 @@ test.describe.serial("Full user journey", () => {
  *
  * Because decryption happens client-side via CryptoJS and verifying it in
  * Playwright would require duplicating the crypto logic, we instead intercept
- * the /api/v1/get/getpw/<key> response AND read the decrypted text from the
+ * the /api/v2/passwords/<key> response AND read the decrypted text from the
  * UI's "Retrieved password for <key>!" alert. The alert has a "Click here to
  * copy" element — the CopyToClipboard component wraps the decrypted value.
  * However the decrypted value is NOT displayed as text; it's only in the
