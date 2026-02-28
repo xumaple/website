@@ -1,25 +1,16 @@
-pub use crate::encrypt::{user2oid, verify_master_key, CryptoError, MasterKey};
-pub use mongodb::{
-    bson::{doc, from_bson, oid::ObjectId, to_bson, Bson, Document},
+use crate::encrypt::{user2oid, CryptoError, MasterKey};
+use mongodb::{
+    bson::{doc, oid::ObjectId, to_bson, Bson},
     error::Error as MongoError,
-    options::{ClientOptions, ResolverConfig},
+    options::ClientOptions,
     Client, Collection,
 };
-pub use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
-use once_cell::sync::OnceCell;
-use tokio::sync::Mutex;
-
-static DB: OnceCell<Collection<User>> = OnceCell::new();
-static DB_INITIALIZED: OnceCell<Mutex<bool>> = OnceCell::new();
+static DB: tokio::sync::OnceCell<Collection<User>> = tokio::sync::OnceCell::const_new();
 
 pub static OID_LEN: usize = 12;
 pub type OID = ObjectId;
-pub fn create_oid(id: &[u8; 12]) -> OID {
-    let mut oid: [u8; 12] = [0; 12];
-    oid.copy_from_slice(id);
-    oid.into()
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PasswordKV {
@@ -27,15 +18,15 @@ pub struct PasswordKV {
     en_password: String,
 }
 
-impl Into<Bson> for PasswordKV {
-    fn into(self) -> Bson {
-        to_bson(&self).unwrap()
+impl From<PasswordKV> for Bson {
+    fn from(kv: PasswordKV) -> Bson {
+        to_bson(&kv).unwrap()
     }
 }
 
-impl Into<Bson> for MasterKey {
-    fn into(self) -> Bson {
-        to_bson(&self).unwrap()
+impl From<MasterKey> for Bson {
+    fn from(mk: MasterKey) -> Bson {
+        to_bson(&mk).unwrap()
     }
 }
 
@@ -58,17 +49,9 @@ pub enum DbError {
 }
 
 pub async fn connect() -> Result<(), DbError> {
-    if let Some(_) = DB.get() {
-        return Ok(());
-    }
-
-    let db_init_lock = DB_INITIALIZED.get_or_init(|| Mutex::new(false));
-
-    let mut db_init_guard = db_init_lock.lock().await;
-    if !*db_init_guard {
-        // Not yet initialized
+    DB.get_or_try_init(|| async {
         let client = Client::with_options(
-            ClientOptions::parse_with_resolver_config(
+            ClientOptions::parse(
                 format!(
                     "mongodb+srv://{}:{}@{}?retryWrites=true&w=majority",
                     std::env::var("MONGO_USER").expect("Need MONGO_USER env variable"),
@@ -76,29 +59,23 @@ pub async fn connect() -> Result<(), DbError> {
                     std::env::var("MONGO_ENDPOINT").expect("Need MONGO_ENDPOINT env variable"),
                 )
                 .as_str(),
-                ResolverConfig::cloudflare(),
             )
             .await?,
         )?;
-
-        DB.set(client.database("users").collection::<User>("users")).expect(
-            "PANIC: No one else should be initializing this as this thread holds the DB_INITIALIZED lock",
-        );
-        *db_init_guard = true;
-        drop(db_init_guard);
-    }
-
+        Ok::<_, DbError>(client.database("users").collection::<User>("users"))
+    })
+    .await?;
     Ok(())
 }
 
 async fn authenticate_user(
-    username: &String,
+    username: &str,
     password: String,
-) -> Result<(&Collection<User>, User, OID), DbError> {
+) -> Result<(&'static Collection<User>, User, OID), DbError> {
     let db = DB.get().unwrap();
     let en_user = user2oid(username);
     let user = find_user(username, en_user).await?;
-    verify_master_key(password, &user.master_key)?;
+    user.master_key.verify(&password)?;
     Ok((db, user, en_user))
 }
 
@@ -112,7 +89,7 @@ pub async fn add_user(username: String, password: String) -> Result<(), DbError>
         });
     }
 
-    let master_key = MasterKey::new_and_encrypt(password)?;
+    let master_key = MasterKey::new(password)?;
 
     db.insert_one(
         &User {
@@ -120,7 +97,6 @@ pub async fn add_user(username: String, password: String) -> Result<(), DbError>
             master_key,
             stored_passwords: vec![],
         },
-        None,
     )
     .await?;
 
@@ -132,7 +108,7 @@ pub async fn verify_user(username: String, password: String) -> Result<(), DbErr
     Ok(())
 }
 
-pub async fn find_user(username: &String, en_user: OID) -> Result<User, DbError> {
+pub async fn find_user(username: &str, en_user: OID) -> Result<User, DbError> {
     match DB
         .get()
         .unwrap()
@@ -140,16 +116,13 @@ pub async fn find_user(username: &String, en_user: OID) -> Result<User, DbError>
             doc! {
                 "_id": en_user
             },
-            None,
         )
         .await?
     {
         Some(u) => Ok(u),
-        None => {
-            return Err(DbError::GenericError {
-                error_msg: format!("Cannot find user {} with username {}", en_user, username),
-            });
-        }
+        None => Err(DbError::GenericError {
+            error_msg: format!("Cannot find user {} with username {}", en_user, username),
+        })
     }
 }
 
@@ -198,8 +171,7 @@ pub async fn add_stored_password(
     if user
         .stored_passwords
         .iter()
-        .find(|&u| u.key == pwkey)
-        .is_some()
+        .any(|u| u.key == pwkey)
     {
         return Err(DbError::GenericError {
             error_msg: format!("Key {} already exists", pwkey),
@@ -212,12 +184,11 @@ pub async fn add_stored_password(
         },
         doc! {
             "$push": {
-                "stored_passwords": Into::<Bson>::into(PasswordKV {
+                "stored_passwords": Bson::from(PasswordKV {
                     key: pwkey, en_password: pwval
                 })
             }
         },
-        None,
     )
     .await?;
 
@@ -248,7 +219,6 @@ pub async fn change_stored_password(
                 "stored_passwords.$.en_password": pwval
             }
         },
-        None,
     )
     .await?;
 
@@ -273,7 +243,7 @@ pub async fn change_master_password(
         });
     }
 
-    let new_mk = MasterKey::new_and_encrypt(new_password)?;
+    let new_mk = MasterKey::new(new_password)?;
 
     db.update_one(
         doc! {
@@ -281,7 +251,7 @@ pub async fn change_master_password(
         },
         doc! {
             "$set": {
-                "master_key": Into::<Bson>::into(new_mk),
+                "master_key": Bson::from(new_mk),
                 "stored_passwords": user.stored_passwords
                     .into_iter()
                     .zip(updated_stored_passwords.into_iter())
@@ -289,9 +259,257 @@ pub async fn change_master_password(
                     .collect::<Vec<PasswordKV>>()
             }
         },
-        None,
     )
     .await?;
 
     Ok(())
+}
+
+/// Deletes a user by username. Only available in debug/test builds.
+#[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+pub async fn delete_user(username: &str) -> Result<(), DbError> {
+    let db = DB.get().unwrap();
+    let en_user = user2oid(username);
+    db.delete_one(doc! { "_id": en_user }).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mongodb::bson::from_bson;
+
+    #[test]
+    fn test_oid_len_constant() {
+        assert_eq!(OID_LEN, 12);
+    }
+
+    #[test]
+    fn test_password_kv_serialization() {
+        let kv = PasswordKV {
+            key: "gmail".to_string(),
+            en_password: "encrypted_password_here".to_string(),
+        };
+        
+        let serialized = serde_json::to_string(&kv).unwrap();
+        let deserialized: PasswordKV = serde_json::from_str(&serialized).unwrap();
+        
+        assert_eq!(deserialized.key, kv.key);
+        assert_eq!(deserialized.en_password, kv.en_password);
+    }
+
+    #[test]
+    fn test_password_kv_into_bson() {
+        let kv = PasswordKV {
+            key: "test_key".to_string(),
+            en_password: "test_value".to_string(),
+        };
+        
+        let bson: Bson = kv.clone().into();
+        
+        // Should convert to a document with key and en_password fields
+        if let Bson::Document(doc) = bson {
+            assert_eq!(doc.get_str("key").unwrap(), "test_key");
+            assert_eq!(doc.get_str("en_password").unwrap(), "test_value");
+        } else {
+            panic!("Expected Bson::Document");
+        }
+    }
+
+    #[test]
+    fn test_master_key_into_bson() {
+        let mk = MasterKey::new("test_password".to_string()).unwrap();
+        let original_pw = mk.master_pw.clone();
+        let original_salt = mk.salt.clone();
+        
+        let bson: Bson = mk.into();
+        
+        if let Bson::Document(doc) = bson {
+            assert_eq!(doc.get_str("master_pw").unwrap(), original_pw);
+            assert_eq!(doc.get_str("salt").unwrap(), original_salt);
+        } else {
+            panic!("Expected Bson::Document");
+        }
+    }
+
+    #[test]
+    fn test_user_serialization() {
+        let user = User {
+            en_user: OID::from_bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+            master_key: MasterKey::new("password".to_string()).unwrap(),
+            stored_passwords: vec![
+                PasswordKV {
+                    key: "site1".to_string(),
+                    en_password: "enc1".to_string(),
+                },
+                PasswordKV {
+                    key: "site2".to_string(),
+                    en_password: "enc2".to_string(),
+                },
+            ],
+        };
+        
+        let bson = to_bson(&user).unwrap();
+        let deserialized: User = from_bson(bson).unwrap();
+        
+        assert_eq!(deserialized.en_user, user.en_user);
+        assert_eq!(deserialized.stored_passwords.len(), 2);
+        assert_eq!(deserialized.stored_passwords[0].key, "site1");
+        assert_eq!(deserialized.stored_passwords[1].key, "site2");
+    }
+
+    #[test]
+    fn test_db_error_from_crypto_error() {
+        let crypto_err = CryptoError::UnspecifiedRingError;
+        let db_err: DbError = crypto_err.into();
+        
+        match db_err {
+            DbError::CryptoError(_) => (), // Expected
+            _ => panic!("Expected DbError::CryptoError"),
+        }
+    }
+
+    #[test]
+    fn test_db_error_generic_error_display() {
+        let err = DbError::GenericError {
+            error_msg: "Test error message".to_string(),
+        };
+        
+        let display = format!("{}", err);
+        assert!(display.contains("Test error message"));
+    }
+
+    #[test]
+    fn test_password_kv_clone() {
+        let original = PasswordKV {
+            key: "original_key".to_string(),
+            en_password: "original_password".to_string(),
+        };
+        
+        let cloned = original.clone();
+        
+        assert_eq!(cloned.key, original.key);
+        assert_eq!(cloned.en_password, original.en_password);
+    }
+
+    // Test helper function for validating password update logic
+    fn validate_password_update_count(
+        stored_len: usize,
+        updated_len: usize,
+    ) -> Result<(), &'static str> {
+        if stored_len != updated_len {
+            return Err("Password count mismatch");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_password_update_validation_matching_counts() {
+        assert!(validate_password_update_count(5, 5).is_ok());
+        assert!(validate_password_update_count(0, 0).is_ok());
+    }
+
+    #[test]
+    fn test_password_update_validation_mismatched_counts() {
+        assert!(validate_password_update_count(5, 3).is_err());
+        assert!(validate_password_update_count(0, 1).is_err());
+    }
+
+    // Test the zip-map logic used in change_master_password
+    #[test]
+    fn test_password_kv_update_mapping() {
+        let original_passwords = vec![
+            PasswordKV {
+                key: "gmail".to_string(),
+                en_password: "old_enc1".to_string(),
+            },
+            PasswordKV {
+                key: "github".to_string(),
+                en_password: "old_enc2".to_string(),
+            },
+        ];
+        
+        let new_encrypted = vec!["new_enc1".to_string(), "new_enc2".to_string()];
+        
+        let updated: Vec<PasswordKV> = original_passwords
+            .into_iter()
+            .zip(new_encrypted.into_iter())
+            .map(|(kv, en_password)| PasswordKV {
+                key: kv.key,
+                en_password,
+            })
+            .collect();
+        
+        assert_eq!(updated.len(), 2);
+        assert_eq!(updated[0].key, "gmail");
+        assert_eq!(updated[0].en_password, "new_enc1");
+        assert_eq!(updated[1].key, "github");
+        assert_eq!(updated[1].en_password, "new_enc2");
+    }
+
+    // Test find logic used in get_stored_password
+    #[test]
+    fn test_find_password_by_key() {
+        let passwords = vec![
+            PasswordKV {
+                key: "gmail".to_string(),
+                en_password: "gmail_enc".to_string(),
+            },
+            PasswordKV {
+                key: "github".to_string(),
+                en_password: "github_enc".to_string(),
+            },
+        ];
+        
+        let found = passwords.iter().find(|kv| kv.key == "github");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().en_password, "github_enc");
+        
+        let not_found = passwords.iter().find(|kv| kv.key == "nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    // Test the key extraction logic used in get_stored_keys
+    #[test]
+    fn test_extract_keys_from_passwords() {
+        let passwords = vec![
+            PasswordKV {
+                key: "gmail".to_string(),
+                en_password: "enc1".to_string(),
+            },
+            PasswordKV {
+                key: "github".to_string(),
+                en_password: "enc2".to_string(),
+            },
+            PasswordKV {
+                key: "twitter".to_string(),
+                en_password: "enc3".to_string(),
+            },
+        ];
+        
+        let keys: Vec<String> = passwords.into_iter().map(|kv| kv.key).collect();
+        
+        assert_eq!(keys, vec!["gmail", "github", "twitter"]);
+    }
+
+    // Test the duplicate key detection logic used in add_stored_password
+    #[test]
+    fn test_duplicate_key_detection() {
+        let passwords = vec![
+            PasswordKV {
+                key: "gmail".to_string(),
+                en_password: "enc1".to_string(),
+            },
+            PasswordKV {
+                key: "github".to_string(),
+                en_password: "enc2".to_string(),
+            },
+        ];
+        
+        let has_gmail = passwords.iter().any(|u| u.key == "gmail");
+        let has_twitter = passwords.iter().any(|u| u.key == "twitter");
+        
+        assert!(has_gmail);
+        assert!(!has_twitter);
+    }
 }

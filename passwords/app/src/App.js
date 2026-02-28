@@ -17,8 +17,8 @@ export default function App() {
   let [password, setPassword] = useState("");
   let [en_pw, setEnPw] = useState("");
 
-  const backend = "https://passwords.maplexu.me";
-  // const backend = "http://localhost:8000";
+  // const backend = "https://passwords.maplexu.me";
+  const backend = "http://localhost:8000";
 
   const setAccountInfo = (user, en_user, pw, en_pw) => {
     setUsername(user);
