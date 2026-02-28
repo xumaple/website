@@ -1,5 +1,6 @@
 import logo from "./logo.svg";
 import "./App.css";
+import lockIcon from "./assets/icons/lock.png";
 import SignIn from "./account/signIn";
 import Account from "./account/account";
 import { hideLoader } from "./loader/loader";
@@ -60,17 +61,17 @@ export default function App() {
                   }}
                 >
                   <img
-                    src="https://static-00.iconduck.com/assets.00/locked-with-key-emoji-1983x2048-c5krhj9s.png"
+                    src={lockIcon}
                     alt="locked with key icon"
-                    width={22}
-                    height={22}
+                    width={28}
+                    height={28}
                   />
                   Welcome to MapoPass
                   <img
-                    src="https://static-00.iconduck.com/assets.00/locked-with-key-emoji-1983x2048-c5krhj9s.png"
+                    src={lockIcon}
                     alt="locked with key icon"
-                    width={22}
-                    height={22}
+                    width={28}
+                    height={28}
                   />
                 </p>
                 <div className="App-subheader">
