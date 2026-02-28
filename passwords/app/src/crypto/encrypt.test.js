@@ -57,9 +57,16 @@ describe("encryptPw / decryptPw round-trip", () => {
 
   test("wrong master password fails to decrypt", () => {
     const encrypted = encryptPw("correct_master", "my_secret");
-    const decrypted = decryptPw("wrong_master", encrypted);
-
-    expect(decrypted).not.toBe("my_secret");
+    // Decrypting with the wrong key either:
+    //   a) throws "Malformed UTF-8 data" (garbage bytes aren't valid UTF-8), or
+    //   b) returns a string that doesn't match the original plaintext.
+    // Which case occurs depends on the random IV chosen during encryption.
+    try {
+      const decrypted = decryptPw("wrong_master", encrypted);
+      expect(decrypted).not.toBe("my_secret");
+    } catch (e) {
+      expect(e.message).toMatch(/Malformed UTF-8 data/);
+    }
   });
 
   test("works with special characters", () => {
@@ -113,11 +120,14 @@ describe("master password change: re-encryption round-trip", () => {
     // Encrypt with plaintext key (what the app does on store)
     const encrypted = encryptPw(plaintextPw, original);
 
-    // Try to decrypt with the HASHED key (what the bug was doing)
-    const badDecrypt = decryptPw(hashedPw, encrypted);
-
-    // This should NOT recover the original — proving the bug
-    expect(badDecrypt).not.toBe(original);
+    // Try to decrypt with the HASHED key (what the bug was doing).
+    // This either throws (malformed UTF-8) or returns the wrong value.
+    try {
+      const badDecrypt = decryptPw(hashedPw, encrypted);
+      expect(badDecrypt).not.toBe(original);
+    } catch (e) {
+      expect(e.message).toMatch(/Malformed UTF-8 data/);
+    }
 
     // Correct: decrypt with plaintext key
     const goodDecrypt = decryptPw(plaintextPw, encrypted);
