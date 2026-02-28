@@ -162,8 +162,16 @@ async fn root() -> String {
     "Don't get hacked".to_owned()
 }
 
+/// Delete a user by username. Only available in debug/test builds for cleanup.
+#[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+#[post("/post/deleteuser?<username>")]
+async fn delete_user(username: String) -> Result<Response, Error> {
+    db::delete_user(&username).await?;
+    Response::Ok()
+}
+
 pub fn build_rocket() -> rocket::Rocket<rocket::Build> {
-    rocket::build()
+    let rocket = rocket::build()
         .mount(
             "/api/v1",
             routes![
@@ -178,5 +186,10 @@ pub fn build_rocket() -> rocket::Rocket<rocket::Build> {
                 change_stored_password,
             ],
         )
-        .mount("/", routes![root])
+        .mount("/", routes![root]);
+
+    #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+    let rocket = rocket.mount("/api/v1", routes![delete_user]);
+
+    rocket
 }

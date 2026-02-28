@@ -2,7 +2,10 @@ use passwords::{build_rocket, db};
 
 #[rocket::main]
 async fn main() -> Result<(), anyhow::Error> {
-    println!("{}", dotenv::dotenv().unwrap().display());
+    // Load .env if present (not required — CI provides env vars directly).
+    if let Ok(path) = dotenv::dotenv() {
+        println!("{}", path.display());
+    }
     db::connect().await?;
 
     let _rocket = build_rocket().launch().await?;

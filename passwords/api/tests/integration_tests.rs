@@ -1,3 +1,29 @@
+//! Integration tests for the MapoPass API.
+//!
+//! These tests exercise the Rocket HTTP routes end-to-end against a real
+//! MongoDB instance (configured via `.env`). They use Rocket's in-process
+//! `Client` so no actual TCP port is opened.
+//!
+//! ## Architecture
+//!
+//! - **Shared runtime**: A single `LazyLock<Runtime>` keeps the MongoDB
+//!   connection pool alive across all tests. Each `#[test]` function calls
+//!   `run()` which delegates to `RT.block_on()`.
+//!
+//! - **Shared client**: A single `LazyLock<Client>` (Rocket's untracked test
+//!   client) is initialized once on the shared runtime.
+//!
+//! - **TestUser RAII**: Each test that needs a user creates a `TestUser` whose
+//!   `Drop` impl deletes it from the database. A separate OS thread is used
+//!   for the cleanup to avoid nesting `block_on` calls.
+//!
+//! ## Running
+//!
+//! ```sh
+//! # From passwords/api/:
+//! cargo test --test integration_tests
+//! ```
+
 use mongodb::bson::oid::ObjectId;
 use passwords::build_rocket;
 use passwords::db;
@@ -93,9 +119,11 @@ fn run<F: std::future::Future>(f: F) -> F::Output {
     RT.block_on(f)
 }
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
 // Tests
-// ---------------------------------------------------------------------------
+// ===========================================================================
+
+// ── Smoke tests ────────────────────────────────────────────────────────────
 
 #[test]
 fn test_root() {
@@ -117,6 +145,8 @@ fn test_generate_password() {
         assert_eq!(pw.len(), 15); // PASSWORD_LEN
     });
 }
+
+// ── Happy-path lifecycle ───────────────────────────────────────────────────
 
 #[test]
 fn test_full_user_lifecycle() {
@@ -271,6 +301,8 @@ fn test_full_user_lifecycle() {
         );
     });
 }
+
+// ── Error / edge-case tests ────────────────────────────────────────────────
 
 #[test]
 fn test_duplicate_user_rejected() {

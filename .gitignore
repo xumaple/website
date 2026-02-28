@@ -7,3 +7,7 @@ target
 build
 .env
 .prod.env
+
+# Playwright
+test-results/
+playwright-report/
