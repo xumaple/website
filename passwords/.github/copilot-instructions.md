@@ -195,6 +195,9 @@ When working in this codebase, always follow these rules:
   most of the work, or `xumaple/copilot/<feature>` when Copilot does the
   majority of the implementation.
 - PRs should target `passwords/master`.
+- For GitHub operations (creating PRs, issues, etc.), use the **`gh` CLI**
+  (`brew install gh`). It is free and does not require a paid subscription.
+  Do not rely on GitKraken/GitLens MCP tools for GitHub operations.
 
 ### General
 
