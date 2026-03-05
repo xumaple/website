@@ -195,6 +195,17 @@ When working in this codebase, always follow these rules:
   most of the work, or `xumaple/copilot/<feature>` when Copilot does the
   majority of the implementation.
 - PRs should target `passwords/master`.
+- For GitHub operations (creating PRs, issues, etc.), use the **`gh` CLI**
+  (`brew install gh`). It is free and does not require a paid subscription.
+  Do not rely on GitKraken/GitLens MCP tools for GitHub operations.
+
+### Commits & PRs
+
+- **Always ask the user for final confirmation** that they are happy with the
+  changes before creating a commit.
+- Once the user has confirmed and the commit is made, it is safe to push and
+  open a PR if the user has expressed that intent — but check first whether
+  they want to combine multiple commits into a single PR.
 
 ### General
 
