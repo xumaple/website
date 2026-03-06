@@ -12,6 +12,7 @@ use db::DbError;
 use encrypt::{generate_password, Credentials, CryptoError};
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -23,10 +24,7 @@ pub enum Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        println!(
-            "Preparing error response. Recorded error: {}\n{:#?}",
-            self, self,
-        );
+        tracing::error!(error = %self, "request failed");
         (StatusCode::NOT_FOUND, "Error.").into_response()
     }
 }
@@ -117,83 +115,94 @@ pub struct PasswordPayload {
 // Routes
 // ---------------------------------------------------------------------------
 
+#[tracing::instrument]
 async fn generate() -> Result<Json<String>, Error> {
     let pw = generate_password()?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(Json(pw))
 }
 
+#[tracing::instrument(skip(creds))]
 async fn create_user(creds: Credentials) -> Result<StatusCode, Error> {
     db::add_user(creds).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
+#[tracing::instrument(skip(creds))]
 async fn verify_user(creds: Credentials) -> Result<StatusCode, Error> {
     db::verify_user(creds).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
+#[tracing::instrument(skip(creds, payload))]
 async fn update_user(
     creds: Credentials,
     Json(payload): Json<UpdateUserPayload>,
 ) -> Result<StatusCode, Error> {
     db::change_master_password(creds, payload.new_password, payload.passwords).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
+#[tracing::instrument(skip(creds))]
 async fn get_stored_keys(creds: Credentials) -> Result<Json<Vec<String>>, Error> {
     let keys = db::get_stored_keys(creds).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(Json(keys))
 }
 
+#[tracing::instrument(skip(creds))]
 async fn get_stored_password(
     creds: Credentials,
     Path(key): Path<String>,
 ) -> Result<Json<String>, Error> {
     let pw = db::get_stored_password(creds, key).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(Json(pw))
 }
 
+#[tracing::instrument(skip(creds))]
 async fn get_stored_passwords(creds: Credentials) -> Result<Json<Vec<String>>, Error> {
     let pws = db::get_stored_passwords(creds).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(Json(pws))
 }
 
+#[tracing::instrument(skip(creds, payload))]
 async fn add_stored_password(
     creds: Credentials,
     Path(key): Path<String>,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
     db::add_stored_password(creds, key, payload.encrypted_password).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
+#[tracing::instrument(skip(creds, payload))]
 async fn change_stored_password(
     creds: Credentials,
     Path(key): Path<String>,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
     db::change_stored_password(creds, key, payload.encrypted_password).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
+#[tracing::instrument]
 async fn root() -> &'static str {
     "Don't get hacked"
 }
 
 /// Delete a user. Only available in debug/test builds for cleanup.
 #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
+#[tracing::instrument(skip(creds))]
 async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
     db::delete_user(creds.username).await?;
-    println!("Returning response Ok");
+    tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
@@ -219,5 +228,6 @@ pub fn build_router() -> Router {
     #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
     let app = app.route("/api/v2/user", axum::routing::delete(delete_user));
 
-    app.layer(cors_layer())
+    app.layer(TraceLayer::new_for_http())
+        .layer(cors_layer())
 }

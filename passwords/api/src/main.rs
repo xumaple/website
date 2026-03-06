@@ -1,17 +1,24 @@
 use passwords::{build_router, db};
 use tokio::net::TcpListener;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
+
     // Load .env if present (not required — CI provides env vars directly).
     if let Ok(path) = dotenv::dotenv() {
-        println!("{}", path.display());
+        tracing::info!(path = %path.display(), "loaded .env");
     }
     db::connect().await?;
 
     let app = build_router();
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
-    println!("Listening on {}", listener.local_addr()?);
+    tracing::info!(addr = %listener.local_addr()?, "listening");
     axum::serve(listener, app).await?;
 
     Ok(())
