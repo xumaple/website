@@ -2,7 +2,7 @@ pub mod db;
 pub mod encrypt;
 
 use axum::{
-    extract::{FromRequestParts, Path},
+    extract::{rejection::PathRejection, FromRequestParts, Path},
     http::{header::HeaderName, request::Parts, HeaderValue, Method, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -26,15 +26,15 @@ impl<S> FromRequestParts<S> for ValidatedKey
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, &'static str);
+    type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let Path(key) = Path::<String>::from_request_parts(parts, state)
-            .await
-            .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid path"))?;
+            .await?;
+        let len = key.len();
         is_valid_key_length(&key)
             .then_some(ValidatedKey(key))
-            .ok_or((StatusCode::BAD_REQUEST, "Key too long"))
+            .ok_or(Error::KeyTooLong(len))
     }
 }
 
@@ -44,6 +44,12 @@ pub enum Error {
     CryptoError(#[from] CryptoError),
     #[error("Error accessing database")]
     DbError(#[from] DbError),
+    #[error("Missing or unparseable credentials headers")]
+    MissingCredentials,
+    #[error("Path parameter extraction failed")]
+    InvalidPath(#[from] PathRejection),
+    #[error("Key length {0} exceeds {MAX_KEY_LENGTH}-character limit")]
+    KeyTooLong(usize),
 }
 
 impl IntoResponse for Error {
@@ -99,7 +105,7 @@ impl<S> FromRequestParts<S> for Credentials
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, &'static str);
+    type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let username = parts
@@ -118,7 +124,7 @@ where
                 username: u,
                 password: p,
             }),
-            _ => Err((StatusCode::UNAUTHORIZED, "Missing credentials")),
+            _ => Err(Error::MissingCredentials),
         }
     }
 }
