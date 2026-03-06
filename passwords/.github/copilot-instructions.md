@@ -248,6 +248,13 @@ When proposing a change that affects crypto, auth, or data formats:
 - Once the user has confirmed and the commit is made, it is safe to push and
   open a PR if the user has expressed that intent — but check first whether
   they want to combine multiple commits into a single PR.
+- **Use separate commits for distinct changes.** When fixing a bug discovered
+  during development of a feature, create a new commit rather than amending
+  the feature commit. This keeps the history readable and makes review easier.
+  Only amend a commit when the change is a trivial correction to that same
+  commit (e.g. a typo introduced in the same diff). If the change has its
+  own logical purpose — such as a bug fix, a config tweak, or a refactor
+  prompted by feedback — it deserves its own commit.
 
 ### General
 
