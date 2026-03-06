@@ -172,7 +172,7 @@ test.describe.serial("Full user journey", () => {
     ).toBeDisabled();
 
     // Clear the field so subsequent tests start clean.
-    // Stay in new-password view — step 4 expects to switch from here.
+    // Stay in new-password view — step 3 opens the drawer from here.
     await page.getByLabel("New Keyname").fill("");
   });
 
