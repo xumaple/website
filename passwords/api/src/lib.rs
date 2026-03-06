@@ -73,7 +73,27 @@ impl<T> JsonResponse<T> {
 // CORS fairing
 // ---------------------------------------------------------------------------
 
-pub struct Cors;
+pub struct Cors {
+    allowed_origins: Vec<String>,
+}
+
+impl Cors {
+    /// Build a `Cors` fairing from the `FRONTEND_ORIGIN` env var.
+    ///
+    /// The variable should contain one or more origins separated by commas
+    /// (e.g. `https://passwords.maplexu.me,http://localhost:3000`).
+    /// Panics if the variable is not set.
+    pub fn from_env() -> Self {
+        let raw = std::env::var("FRONTEND_ORIGIN")
+            .expect("Need FRONTEND_ORIGIN env variable");
+        let allowed_origins = raw
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        Self { allowed_origins }
+    }
+}
 
 #[rocket::async_trait]
 impl Fairing for Cors {
@@ -84,16 +104,21 @@ impl Fairing for Cors {
         }
     }
 
-    async fn on_response<'r>(&self, _req: &'r Request<'_>, res: &mut RocketResponse<'r>) {
-        res.set_header(Header::new("Access-Control-Allow-Origin", "*"));
-        res.set_header(Header::new(
-            "Access-Control-Allow-Methods",
-            "GET, POST, PUT, DELETE, OPTIONS",
-        ));
-        res.set_header(Header::new(
-            "Access-Control-Allow-Headers",
-            "x-username, x-password, Content-Type",
-        ));
+    async fn on_response<'r>(&self, req: &'r Request<'_>, res: &mut RocketResponse<'r>) {
+        if let Some(origin) = req.headers().get_one("Origin") {
+            if self.allowed_origins.iter().any(|o| o == origin) {
+                res.set_header(Header::new("Access-Control-Allow-Origin", origin.to_string()));
+                res.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+                res.set_header(Header::new(
+                    "Access-Control-Allow-Methods",
+                    "GET, POST, PUT, DELETE, OPTIONS",
+                ));
+                res.set_header(Header::new(
+                    "Access-Control-Allow-Headers",
+                    "x-username, x-password, Content-Type",
+                ));
+            }
+        }
     }
 }
 
@@ -231,7 +256,7 @@ async fn delete_user(creds: Credentials) -> Result<Response, Error> {
 
 pub fn build_rocket() -> rocket::Rocket<rocket::Build> {
     let rocket = rocket::build()
-        .attach(Cors)
+        .attach(Cors::from_env())
         .mount(
             "/api/v2",
             routes![

@@ -18,6 +18,7 @@ jobs:
       MONGO_USER: ${{ secrets.MONGO_USER }}
       MONGO_PW: ${{ secrets.MONGO_PW }}
       MONGO_ENDPOINT: ${{ secrets.MONGO_ENDPOINT }}
+      FRONTEND_ORIGIN: http://localhost:3000
     defaults:
       run:
         working-directory: passwords/api
@@ -75,6 +76,7 @@ jobs:
       MONGO_USER: ${{ secrets.MONGO_USER }}
       MONGO_PW: ${{ secrets.MONGO_PW }}
       MONGO_ENDPOINT: ${{ secrets.MONGO_ENDPOINT }}
+      FRONTEND_ORIGIN: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
 
