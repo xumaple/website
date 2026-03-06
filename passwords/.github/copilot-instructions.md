@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-MapoPass is a password manager with a **Rust/Rocket API** backend and a
+MapoPass is a password manager with a **Rust/Axum API** backend and a
 **React (CRA) + Electron** frontend. Passwords are encrypted client-side
 before being sent to the server; the server never sees plaintext passwords.
 
@@ -14,30 +14,34 @@ The repository is hosted on **GitHub** at `xumaple/website`.
 
 ### API (`api/`)
 
-- **Framework**: Rocket 0.5 (async)
+- **Framework**: Axum (async, with tower and tower-http)
 - **Database**: MongoDB Atlas (via the `mongodb` crate)
 - **Crypto**: `ring` (PBKDF2-HMAC-SHA512 for master key hashing, 100 000 iterations),
   `data-encoding` (hex encoding). Password generation via the `passwords` crate
   (renamed import `passwords_gen`).
 - **Auth model**: Credentials (`x-username`, `x-password`) are sent as HTTP
-  headers and extracted via a Rocket `FromRequest` guard on `Credentials`.
+  headers and extracted via an Axum `FromRequestParts` impl on `Credentials`.
   Username is hashed to a MongoDB ObjectId; master password is verified with
   PBKDF2.
 - **Key types**: `UnencryptedMasterKey` → `MasterKey` type-state pattern
   enforces that a plaintext password must be hashed before storage or
   verification.
-- **Library crate**: `lib.rs` exposes `build_rocket()` and public modules
+- **Library crate**: `lib.rs` exposes `build_router()` and public modules
   `db` and `encrypt`. `main.rs` is a thin launcher.
 - **Test-only routes**: `DELETE /api/v2/user` is gated behind
   `#[cfg(any(test, debug_assertions, feature = "test-helpers"))]`.
-- **Env vars**: `MONGO_USER`, `MONGO_PW`, `MONGO_ENDPOINT` (loaded from
-  `api/.env` locally, or from GitHub secrets in CI).
+- **Env vars**: `MONGO_USER`, `MONGO_PW`, `MONGO_ENDPOINT`,
+  `FRONTEND_ORIGIN` (loaded from `api/.env` locally, or from GitHub
+  secrets in CI). `FRONTEND_ORIGIN` should be a list of comma-separated
+  allowed CORS origins.
+- **CORS**: Handled by a tower-http `CorsLayer` built from the
+  `FRONTEND_ORIGIN` env var.
 - **Cargo feature**: `test-helpers` — enables the delete-user route for
   integration tests in release-like builds.
 
 ### Frontend (`app/`)
 
-- **Framework**: React 18 (Create React App), Material UI 5
+- **Framework**: React (Create React App), Material UI
 - **Crypto (client-side)**: `crypto-js` — SHA-3 truncated to 16 chars for
   master key encoding (`encryptMaster`), SHA-256 as AES key derivation
   (`shaHash`), AES encrypt/decrypt for stored passwords.
@@ -58,10 +62,10 @@ The repository is hosted on **GitHub** at `xumaple/website`.
 | GET | `/user/verify` | Header | Verify credentials |
 | PUT | `/user` | Header | Change master password (re-encrypts all passwords) |
 | GET | `/keys` | Header | List stored password keys |
-| GET | `/passwords/<key>` | Header | Get single encrypted password |
+| GET | `/passwords/{key}` | Header | Get single encrypted password |
 | GET | `/passwords` | Header | Get all encrypted passwords |
-| POST | `/passwords/<key>` | Header | Add encrypted password |
-| PUT | `/passwords/<key>` | Header | Update encrypted password |
+| POST | `/passwords/{key}` | Header | Add encrypted password |
+| PUT | `/passwords/{key}` | Header | Update encrypted password |
 | DELETE | `/user` | Header | Delete user (debug/test only) |
 
 ## Test Suites
@@ -90,12 +94,15 @@ logic, key-mismatch regression test.
 cd api && cargo test --test integration_tests --features test-helpers
 ```
 
-Located in `api/tests/integration_tests.rs`. Tests every Rocket route against
-a live MongoDB instance using Rocket's in-process `Client` (no TCP port).
+Located in `api/tests/integration_tests.rs`. Tests every Axum route against
+a live MongoDB instance using Axum's in-process `Router` with
+`tower::ServiceExt::oneshot` (no TCP port).
 
-Key patterns:
-- **Shared runtime**: `LazyLock<Runtime>` keeps the MongoDB connection pool alive.
-- **Shared client**: `LazyLock<Client>` (Rocket untracked test client), initialized once.
+Key testing patterns:
+- **Shared runtime**: A `LazyLock<Runtime>` keeps the MongoDB connection
+  pool alive across all tests. Each `#[test]` calls `RT.block_on()`.
+- **Shared router**: A `LazyLock<Router>` initialized once on the shared
+  runtime; each request clones it (Axum routers are cheaply cloneable).
 - **`TestUser` RAII**: Each test creates a `TestUser` whose `Drop` deletes it
   from the database (cleanup runs on a separate OS thread to avoid nested
   `block_on`).
@@ -111,7 +118,7 @@ sign up → add passwords (generated + manual) → query & verify → change mas
 password → log out → log back in → re-verify → cleanup.
 
 Playwright config (`app/playwright.config.js`) auto-starts both servers:
-- Rocket API: `cargo run` on port 8000
+- Axum API: `cargo run` on port 8000
 - React dev server: `npm start` on port 3000
 
 Use `--headed` to watch: `npx playwright test --headed`
@@ -126,15 +133,6 @@ Three jobs:
 2. **JS Tests** — `npm run test:unit`
 3. **E2E Tests** — builds API, installs Playwright Chromium, runs e2e
 
-## Recent History
-
-- **PR #23** (`4c467ef`): Added all four test suites (Rust unit, JS unit,
-  Rust integration, Playwright e2e), refactored `lib.rs` out of `main.rs`,
-  added `build_rocket()`, CI workflow, `test-helpers` feature, `TestUser`
-  RAII pattern, README.
-- **PR #24** (`7cc88ec`): Moved auth from JSON body to `x-username` /
-  `x-password` headers, added Rocket `FromRequest` guard for `Credentials`.
-
 ## Conventions
 
 - Rust: follow `cargo clippy -- -D warnings` (zero warnings policy).
@@ -142,8 +140,8 @@ Three jobs:
 - Tests should be deterministic; e2e tests run single-threaded (`workers: 1`).
 - Integration tests must clean up after themselves (RAII `TestUser`).
 - Prefer `thiserror` for library error types, `anyhow` for binary/main.
-- CORS is handled by a Rocket fairing; the catch-all `OPTIONS` handler returns
-  `204 No Content`.
+- CORS is handled by a tower-http `CorsLayer`; Axum handles `OPTIONS`
+  preflight automatically.
 
 ## Agent Rules
 
@@ -172,6 +170,10 @@ When working in this codebase, always follow these rules:
   `x-username` / `x-password` headers. Never introduce cookies, sessions,
   JWTs, or any mechanism that persists a logged-in state. The client
   re-authenticates on every API call by design.
+- **Uniform error responses**: All API errors return `404 Not Found` with a
+  generic message. This is intentional — varying status codes (e.g. 401 vs
+  404) would let attackers enumerate valid usernames or password keys. Do
+  not "fix" this by returning more specific error codes.
 
 ### Backwards Compatibility — Production Constraints
 
@@ -275,3 +277,11 @@ When proposing a change that affects crypto, auth, or data formats:
 - Follow the existing code style and patterns already in the codebase.
 - When unsure about a design decision, look at how similar problems were
   solved elsewhere in the project before inventing a new pattern.
+
+### Coding Tips
+
+- **Axum layer ordering**: In Axum, `.layer(...)` only wraps routes that
+  were added **before** the layer call. If a route is added *after*
+  `.layer()`, the middleware will not apply to it — leading to subtle bugs.
+  Always apply shared layers (CORS, tracing, rate limiting) after all routes
+  have been registered, including conditional `#[cfg(...)]` routes.
