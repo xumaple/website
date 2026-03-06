@@ -45,6 +45,7 @@ let PasswordInput = ({
 }) => {
   const [key, setKey] = useState("");
   const [pw, setPw] = useState("");
+  const [keyError, setKeyError] = useState("");
   const [currentlyUploading, setCurrentlyUploading] = useState(false);
   const [uploadState, setInnerUploadState] = useState(UPLOAD_PENDING);
 
@@ -67,12 +68,11 @@ let PasswordInput = ({
       return;
     }
 
-    if (key === "" || pw === "") {
-      setUploadState(UPLOAD_BAD);
-      return;
-    }
-
-    if (key.length > 128) {
+    // UPLOAD_BAD signals that this row cannot be uploaded (missing fields or
+    // validation error). The parent resets the row back to NOT_UPLOADING.
+    // Specific validation errors (e.g. key too long) are surfaced via the
+    // TextField's helperText, not via the upload-state icon.
+    if (key === "" || pw === "" || key.length > 128) {
       setUploadState(UPLOAD_BAD);
       return;
     }
@@ -135,8 +135,16 @@ let PasswordInput = ({
       <TextField
         type="text"
         label="key"
+        error={keyError !== ""}
+        helperText={keyError}
         onChange={(e) => {
-          setKey(e.target.value);
+          const newKey = e.target.value;
+          setKey(newKey);
+          if (newKey.length > 128) {
+            setKeyError("Key is too long (max 128 characters).");
+          } else {
+            setKeyError("");
+          }
         }}
         sx={{
           width: "50%",

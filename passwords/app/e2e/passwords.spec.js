@@ -150,6 +150,35 @@ test.describe.serial("Full user journey", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // Step 2b: Reject a too-long key in the generate flow
+  // ────────────────────────────────────────────────────────────────────────
+  test("reject a too-long key in generate flow", async () => {
+    // We should still be in the generate view from step 2.
+    await expect(
+      page.getByText("Enter a keyname for your password!")
+    ).toBeVisible();
+
+    // Type a key that exceeds the 128-character limit.
+    await page.getByLabel("New Keyname").fill("a".repeat(129));
+
+    // The inline validation error should appear.
+    await expect(
+      page.getByText("Key is too long (max 128 characters).")
+    ).toBeVisible({ timeout: 5_000 });
+
+    // The Generate button should be disabled.
+    await expect(
+      page.getByRole("button", { name: "Generate" })
+    ).toBeDisabled();
+
+    // Clear the field and go back to query view for subsequent tests.
+    await page.getByLabel("New Keyname").fill("");
+    await page
+      .getByRole("button", { name: "Query an existing password" })
+      .click();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // Step 3: Add a password via the sidebar "Manually Add Passwords" modal
   // ────────────────────────────────────────────────────────────────────────
   test("add a manual password via sidebar", async () => {
@@ -212,15 +241,11 @@ test.describe.serial("Full user journey", () => {
     // Fill in a key that exceeds the 128-character limit.
     const modal = page.locator("[role='dialog']");
     await modal.getByLabel("key").fill("a".repeat(129));
-    await modal.getByLabel("password").fill("somepassword");
 
-    // Click "Save all".
-    await modal.getByRole("button", { name: "Save all" }).click();
-
-    // The red error icon should appear indicating the upload was rejected.
-    await expect(page.locator("[data-testid='ErrorIcon']")).toBeVisible({
-      timeout: 10_000,
-    });
+    // The inline validation error should appear on the key field.
+    await expect(
+      modal.getByText("Key is too long (max 128 characters).")
+    ).toBeVisible({ timeout: 5_000 });
 
     // Close the modal.
     await page.keyboard.press("Escape");

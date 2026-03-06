@@ -15,38 +15,45 @@ use tower_http::cors::CorsLayer;
 
 const MAX_KEY_LENGTH: usize = 128;
 
+fn is_valid_key_length(key: &str) -> bool {
+    key.len() <= MAX_KEY_LENGTH
+}
+
+/// A password key name that has been validated for length.
+pub struct ValidatedKey(pub String);
+
+impl<S> FromRequestParts<S> for ValidatedKey
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Path(key) = Path::<String>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid path"))?;
+        is_valid_key_length(&key)
+            .then_some(ValidatedKey(key))
+            .ok_or((StatusCode::BAD_REQUEST, "Key too long"))
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Error doing cryptography work")]
     CryptoError(#[from] CryptoError),
     #[error("Error accessing database")]
     DbError(#[from] DbError),
-    #[error("{0}")]
-    ValidationError(String),
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        match &self {
-            Error::ValidationError(msg) => {
-                (StatusCode::BAD_REQUEST, msg.clone()).into_response()
-            }
-            _ => {
-                println!(
-                    "Preparing error response. Recorded error: {}\n{:#?}",
-                    self, self,
-                );
-                (StatusCode::NOT_FOUND, "Error.").into_response()
-            }
-        }
+        println!(
+            "Preparing error response. Recorded error: {}\n{:#?}",
+            self, self,
+        );
+        (StatusCode::NOT_FOUND, "Error.").into_response()
     }
-}
-
-fn validate_key(key: &str) -> Result<(), Error> {
-    if key.len() > MAX_KEY_LENGTH {
-        return Err(Error::ValidationError("Key too long".into()));
-    }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -170,9 +177,8 @@ async fn get_stored_keys(creds: Credentials) -> Result<Json<Vec<String>>, Error>
 
 async fn get_stored_password(
     creds: Credentials,
-    Path(key): Path<String>,
+    ValidatedKey(key): ValidatedKey,
 ) -> Result<Json<String>, Error> {
-    validate_key(&key)?;
     let pw = db::get_stored_password(creds, key).await?;
     println!("Returning response Ok");
     Ok(Json(pw))
@@ -186,10 +192,9 @@ async fn get_stored_passwords(creds: Credentials) -> Result<Json<Vec<String>>, E
 
 async fn add_stored_password(
     creds: Credentials,
-    Path(key): Path<String>,
+    ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
-    validate_key(&key)?;
     db::add_stored_password(creds, key, payload.encrypted_password).await?;
     println!("Returning response Ok");
     Ok(StatusCode::OK)
@@ -197,10 +202,9 @@ async fn add_stored_password(
 
 async fn change_stored_password(
     creds: Credentials,
-    Path(key): Path<String>,
+    ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
-    validate_key(&key)?;
     db::change_stored_password(creds, key, payload.encrypted_password).await?;
     println!("Returning response Ok");
     Ok(StatusCode::OK)
@@ -248,19 +252,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn validate_key_at_max_length() {
+    fn key_at_max_length_is_valid() {
         let key = "a".repeat(MAX_KEY_LENGTH);
-        assert!(validate_key(&key).is_ok());
+        assert!(is_valid_key_length(&key));
     }
 
     #[test]
-    fn validate_key_exceeds_max_length() {
+    fn key_exceeding_max_length_is_invalid() {
         let key = "a".repeat(MAX_KEY_LENGTH + 1);
-        assert!(validate_key(&key).is_err());
+        assert!(!is_valid_key_length(&key));
     }
 
     #[test]
-    fn validate_key_empty() {
-        assert!(validate_key("").is_ok());
+    fn empty_key_is_valid() {
+        assert!(is_valid_key_length(""));
     }
 }

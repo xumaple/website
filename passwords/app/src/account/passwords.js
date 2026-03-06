@@ -191,6 +191,7 @@ export function NewPassword({
   setErrorMsg
 }) {
   const [key, setKey] = useState("");
+  const [keyError, setKeyError] = useState("");
   const [copyText, setCopyText] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -286,8 +287,16 @@ export function NewPassword({
       <TextField
         label="New Keyname"
         type="text"
+        error={keyError !== ""}
+        helperText={keyError}
         onChange={(e) => {
-          setKey(e.target.value);
+          const newKey = e.target.value;
+          setKey(newKey);
+          if (newKey.length > 128) {
+            setKeyError("Key is too long (max 128 characters).");
+          } else {
+            setKeyError("");
+          }
         }}
         value={key}
         autoFocus={true}
@@ -313,6 +322,7 @@ export function NewPassword({
         }}
       />
       <Button
+        disabled={keyError !== ""}
         sx={{
           width: "100%",
           height: "45px",
