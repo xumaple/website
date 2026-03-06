@@ -55,7 +55,6 @@ export default function Account({
       })
         .then((response) => {
           if (response.status !== 200) {
-            console.log(response);
             throw new Error("Error while trying to get keys.");
           }
           return response.json();
@@ -63,12 +62,10 @@ export default function Account({
         .then((updatedKeys) => {
           setKeys(updatedKeys);
         })
-        .catch((e) => {
-          console.error(e);
+        .catch(() => {
           setErrorMsg("Unable to retrieve stored passwords at this time.");
         })
         .finally(() => {
-          console.log("Finished retrieving keys");
           hideLoader();
         });
     }

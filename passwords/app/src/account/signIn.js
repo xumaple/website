@@ -38,7 +38,6 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     const submittedPw = encryptMaster(password);
     const submittedUser = encryptMaster(username);
     setPasswordHook("");
-    console.log("submitted password with user", username);
     showLoader();
     fetch(
       isCreatingAccount
@@ -54,18 +53,16 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     )
       .then((response) => {
         if (response.status !== 200) {
-          console.log(response);
           throw new Error("Unable to log in.");
         }
         setAccountInfo(username, submittedUser, password, submittedPw);
       })
-      .catch((e) => {
+      .catch(() => {
         setErrorMsg(
           isCreatingAccount
             ? " Unable to create account, please try a different usename."
             : "Unable to log in, please try again."
         );
-        console.error(e);
       })
       .finally(hideLoader);
   };

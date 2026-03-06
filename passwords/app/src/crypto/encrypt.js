@@ -40,14 +40,12 @@ export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, 
   })
     .then((response) => {
       if (response.status !== 200) {
-        console.log(response);
         throw new Error("Error while trying to get passwords.");
       }
       return response.json();
     })
     .then((json) => {
       const updated_pws = json.map((p) => encryptPw(newPlaintextPw, decryptPw(oldPlaintextPw, p)));
-      console.log("got to", updated_pws);
       return fetch(`${backend}/api/v2/user`, {
         method: "PUT",
         headers: {
@@ -61,23 +59,15 @@ export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, 
         }),
       })
         .then((response) => {
-          console.log("Still fetching");
           if (response.status !== 200) {
-            console.log(response);
             throw new Error("Error while trying to update passwords");
           }
           return true;
-        })
-        .catch((e) => {
-          console.error("Error sending updated passwords to server");
-          throw e;
         });
     })
-    .catch((e) => {
-      console.error(e);
+    .catch(() => {
       return false;
     });
-  console.log("result: ", result);
 
   return result !== false;
 }
