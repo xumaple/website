@@ -271,6 +271,18 @@ When proposing a change that affects crypto, auth, or data formats:
   own logical purpose — such as a bug fix, a config tweak, or a refactor
   prompted by feedback — it deserves its own commit.
 
+### Delegating to Subagents
+
+- **Always point subagents at this file.** When spawning a subagent, tell
+  it to read `passwords/.github/copilot-instructions.md` and follow all
+  rules — especially security, uniform error responses, and branching.
+  Never override project conventions by providing exact code in the prompt;
+  describe *what* needs to happen and let the subagent derive the
+  implementation from the codebase and these instructions.
+- **Subagents may spawn their own subagents.** If a subagent decides a
+  subtask is complex enough to delegate further, that is fine — the same
+  rules apply recursively.
+
 ### General
 
 - Prefer small, focused commits with clear intent.
@@ -285,3 +297,11 @@ When proposing a change that affects crypto, auth, or data formats:
   `.layer()`, the middleware will not apply to it — leading to subtle bugs.
   Always apply shared layers (CORS, tracing, rate limiting) after all routes
   have been registered, including conditional `#[cfg(...)]` routes.
+- **Use Rust's type system, not stringly-typed catch-alls.** Each distinct
+  error condition should be its own enum variant with a descriptive name
+  (e.g. `MissingCredentials`, `KeyTooLong`), not a generic variant like
+  `Rejection(&'static str)` reused across unrelated call sites. Variant
+  names should describe *what went wrong*, and `#[error("...")]` messages
+  should provide enough context for logs to be useful — the `IntoResponse`
+  impl logs this before returning the uniform 404. When an inner error
+  exists, use `#[from]` to wrap it (see `CryptoError`, `DbError`).
