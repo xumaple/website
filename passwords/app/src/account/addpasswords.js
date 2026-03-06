@@ -246,9 +246,19 @@ export default function AddPasswordsModal({
       };
     }
     if (action.type === REMOVE) {
+      const newInputs = _changeOne(state.inputs, action.index, null);
+      const newCount = state.numActivePasswordInputs - 1;
+      // When all rows have been removed (e.g. after all uploads succeed),
+      // automatically add a fresh empty row so the modal is never empty.
+      if (newCount === 0) {
+        return {
+          inputs: [...newInputs, NOT_UPLOADING],
+          numActivePasswordInputs: 1,
+        };
+      }
       return {
-        inputs: _changeOne(state.inputs, action.index, null),
-        numActivePasswordInputs: state.numActivePasswordInputs - 1,
+        inputs: newInputs,
+        numActivePasswordInputs: newCount,
       };
     }
     if (action.type === CHANGE_ONE) {
