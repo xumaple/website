@@ -72,6 +72,11 @@ let PasswordInput = ({
       return;
     }
 
+    if (key.length > 128) {
+      setUploadState(UPLOAD_BAD);
+      return;
+    }
+
     setInnerUploadState(UPLOAD_PENDING);
     setCurrentlyUploading(true);
 

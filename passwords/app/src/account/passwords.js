@@ -216,6 +216,10 @@ export function NewPassword({
     if (key === "") {
       setErrorMsg("Must specify a key to generate.");
     }
+    if (key.length > 128) {
+      setErrorMsg("Key name is too long (max 128 characters).");
+      return;
+    }
     if (key in keys) {
       setErrorMsg("You already have a key of this name!");
     }

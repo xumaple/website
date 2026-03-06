@@ -13,22 +13,40 @@ use encrypt::{generate_password, Credentials, CryptoError};
 use serde::Deserialize;
 use tower_http::cors::CorsLayer;
 
+const MAX_KEY_LENGTH: usize = 128;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Error doing cryptography work")]
     CryptoError(#[from] CryptoError),
     #[error("Error accessing database")]
     DbError(#[from] DbError),
+    #[error("{0}")]
+    ValidationError(String),
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        println!(
-            "Preparing error response. Recorded error: {}\n{:#?}",
-            self, self,
-        );
-        (StatusCode::NOT_FOUND, "Error.").into_response()
+        match &self {
+            Error::ValidationError(msg) => {
+                (StatusCode::BAD_REQUEST, msg.clone()).into_response()
+            }
+            _ => {
+                println!(
+                    "Preparing error response. Recorded error: {}\n{:#?}",
+                    self, self,
+                );
+                (StatusCode::NOT_FOUND, "Error.").into_response()
+            }
+        }
     }
+}
+
+fn validate_key(key: &str) -> Result<(), Error> {
+    if key.len() > MAX_KEY_LENGTH {
+        return Err(Error::ValidationError("Key too long".into()));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +172,7 @@ async fn get_stored_password(
     creds: Credentials,
     Path(key): Path<String>,
 ) -> Result<Json<String>, Error> {
+    validate_key(&key)?;
     let pw = db::get_stored_password(creds, key).await?;
     println!("Returning response Ok");
     Ok(Json(pw))
@@ -170,6 +189,7 @@ async fn add_stored_password(
     Path(key): Path<String>,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
+    validate_key(&key)?;
     db::add_stored_password(creds, key, payload.encrypted_password).await?;
     println!("Returning response Ok");
     Ok(StatusCode::OK)
@@ -180,6 +200,7 @@ async fn change_stored_password(
     Path(key): Path<String>,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
+    validate_key(&key)?;
     db::change_stored_password(creds, key, payload.encrypted_password).await?;
     println!("Returning response Ok");
     Ok(StatusCode::OK)
@@ -220,4 +241,26 @@ pub fn build_router() -> Router {
     let app = app.route("/api/v2/user", axum::routing::delete(delete_user));
 
     app.layer(cors_layer())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_key_at_max_length() {
+        let key = "a".repeat(MAX_KEY_LENGTH);
+        assert!(validate_key(&key).is_ok());
+    }
+
+    #[test]
+    fn validate_key_exceeds_max_length() {
+        let key = "a".repeat(MAX_KEY_LENGTH + 1);
+        assert!(validate_key(&key).is_err());
+    }
+
+    #[test]
+    fn validate_key_empty() {
+        assert!(validate_key("").is_ok());
+    }
 }

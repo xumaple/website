@@ -196,6 +196,40 @@ test.describe.serial("Full user journey", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // Step 3b: Reject a key that is too long in the manual-add modal
+  // ────────────────────────────────────────────────────────────────────────
+  test("reject a key that is too long", async () => {
+    // Open the drawer and click "Manually Add Passwords".
+    await page.locator(".user").click();
+    const manualAddBtn = page.getByText("Manually Add Passwords");
+    await expect(manualAddBtn).toBeVisible();
+    await manualAddBtn.click({ timeout: 10_000 });
+
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).toBeVisible();
+
+    // Fill in a key that exceeds the 128-character limit.
+    const modal = page.locator("[role='dialog']");
+    await modal.getByLabel("key").fill("a".repeat(129));
+    await modal.getByLabel("password").fill("somepassword");
+
+    // Click "Save all".
+    await modal.getByRole("button", { name: "Save all" }).click();
+
+    // The red error icon should appear indicating the upload was rejected.
+    await expect(page.locator("[data-testid='ErrorIcon']")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Close the modal.
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // Step 4: Query both passwords and verify correctness
   // ────────────────────────────────────────────────────────────────────────
   test("query both passwords", async () => {
