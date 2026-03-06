@@ -288,6 +288,10 @@ When proposing a change that affects crypto, auth, or data formats:
 - **Subagents may spawn their own subagents.** If a subagent decides a
   subtask is complex enough to delegate further, that is fine — the same
   rules apply recursively.
+- **Subagents must run relevant tests.** Before reporting success, a
+  subagent that changes code must run the relevant test suite(s) and
+  confirm they pass. The main agent must also verify tests pass before
+  committing and pushing. Never push code that hasn't been tested locally.
 
 ### General
 
