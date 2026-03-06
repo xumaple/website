@@ -17,7 +17,9 @@ passwords_gen = { version = "3.1", package = "passwords" }
 dotenv = "0.15"
 axum = { version = "0.8", features = ["macros"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 mongodb = "3.5"
 tokio = { version = "1.49", features = ["rt-multi-thread", "macros"] }
 serde = "1.0"
