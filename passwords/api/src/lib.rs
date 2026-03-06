@@ -3,6 +3,7 @@ extern crate rocket;
 
 pub mod db;
 pub mod encrypt;
+pub mod rate_limit;
 
 use db::DbError;
 use encrypt::{generate_password, Credentials, CryptoError};
@@ -112,6 +113,15 @@ impl<'r> FromRequest<'r> for Credentials {
     type Error = ();
 
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        // Check rate limit before processing credentials
+        if let Some(limiter) = req.rocket().state::<rate_limit::RateLimiter>() {
+            if let Some(ip) = req.client_ip() {
+                if !limiter.check(ip) {
+                    return request::Outcome::Error((Status::TooManyRequests, ()));
+                }
+            }
+        }
+
         match (
             req.headers().get_one("x-username"),
             req.headers().get_one("x-password"),
@@ -230,7 +240,11 @@ async fn delete_user(creds: Credentials) -> Result<Response, Error> {
 // ---------------------------------------------------------------------------
 
 pub fn build_rocket() -> rocket::Rocket<rocket::Build> {
+    let rate_limiter =
+        rate_limit::RateLimiter::new(30, std::time::Duration::from_secs(60));
+
     let rocket = rocket::build()
+        .manage(rate_limiter)
         .attach(Cors)
         .mount(
             "/api/v2",
