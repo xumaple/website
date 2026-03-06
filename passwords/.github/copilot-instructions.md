@@ -173,6 +173,37 @@ When working in this codebase, always follow these rules:
   JWTs, or any mechanism that persists a logged-in state. The client
   re-authenticates on every API call by design.
 
+### Backwards Compatibility — Production Constraints
+
+**This application is already running in production with real user data.**
+Before changing any code that touches authentication, encryption, or data
+storage, stop and think about whether existing users and their stored data
+will still work after the change.
+
+Some changes are **impossible** — for example, `encryptMaster()` is a
+one-way hash (SHA-3 truncated to 16 chars) that produces the values sent as
+`x-username` and `x-password` headers. There is no way to "migrate" a
+one-way hash; if the algorithm changes, every existing user's credentials
+become permanently invalid with no recovery path.
+
+Other changes are **possible but require a careful migration** — for
+example, server-side encryption schemes (PBKDF2 parameters, salt format)
+or the way stored passwords are encrypted could theoretically be migrated
+by reading old-format data, decrypting/re-encrypting, and writing it back
+in the new format. But this requires a well-planned migration strategy,
+potentially running old and new schemes in parallel, and must be executed
+flawlessly since any bug means permanent data loss.
+
+When proposing a change that affects crypto, auth, or data formats:
+1. **Determine if the change is reversible or migratable.** Can existing
+   data be converted to the new scheme? Or is it a one-way function whose
+   output is already baked into stored data?
+2. **If not migratable**, the change cannot be made (or must be additive —
+   support both old and new schemes indefinitely).
+3. **If migratable**, design the migration plan *before* writing any code.
+   Call out the risks, the rollback strategy, and get explicit user
+   approval before proceeding.
+
 ### Secrets & Environment Files
 
 - **Never read, open, display, or include the contents of `.env` files.**
@@ -187,6 +218,11 @@ When working in this codebase, always follow these rules:
   task** so future sessions start with accurate context.
 - Avoid putting counts or quantities that change frequently (e.g. number of
   tests) in this file — they go stale quickly.
+- **Write instructions that generalize.** When adding a new rule based on a
+  specific situation, extract the underlying lesson rather than describing
+  the exact scenario. Future agents should learn *how to think* about a
+  class of problems, not memorize one instance. Use concrete examples to
+  illustrate, but frame the rule broadly enough to cover similar situations.
 
 ### Branching
 
@@ -195,6 +231,12 @@ When working in this codebase, always follow these rules:
   most of the work, or `xumaple/copilot/<feature>` when Copilot does the
   majority of the implementation.
 - PRs should target `passwords/master`.
+- **Start from a clean base.** Before beginning new work, make sure you are
+  on the main branch with the latest changes. If there are uncommitted
+  changes, stash them first (`git stash`), switch to main and pull, then
+  create the new feature branch and restore the stash if needed. Never
+  start a feature branch from another unmerged feature branch unless
+  intentionally stacking changes.
 - For GitHub operations (creating PRs, issues, etc.), use the **`gh` CLI**
   (`brew install gh`). It is free and does not require a paid subscription.
   Do not rely on GitKraken/GitLens MCP tools for GitHub operations.
