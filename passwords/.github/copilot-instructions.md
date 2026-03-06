@@ -240,6 +240,19 @@ When proposing a change that affects crypto, auth, or data formats:
 - For GitHub operations (creating PRs, issues, etc.), use the **`gh` CLI**
   (`brew install gh`). It is free and does not require a paid subscription.
   Do not rely on GitKraken/GitLens MCP tools for GitHub operations.
+- **Use git worktrees for parallel work.** When working on a separate task
+  (e.g. a docs PR while a feature branch is in progress), create a new
+  worktree instead of switching branches in the main worktree. This avoids
+  disrupting the user's working directory. Example:
+  `git worktree add ../passwords-<feature> -b <branch>`. Subagents must
+  always use a dedicated worktree — never switch branches or make commits
+  in the user's main worktree.
+- **Clean up worktrees when done.** After a branch is merged or a task is
+  complete, remove the worktree (`git worktree remove ../passwords-<feature>`)
+  and delete the local branch (`git branch -d <branch>`). Do not leave
+  stale worktrees accumulating. When beginning a new session, check
+  `git worktree list` and clean up any leftover worktrees from previous
+  work whose branches have already been merged.
 
 ### Commits & PRs
 
@@ -248,6 +261,13 @@ When proposing a change that affects crypto, auth, or data formats:
 - Once the user has confirmed and the commit is made, it is safe to push and
   open a PR if the user has expressed that intent — but check first whether
   they want to combine multiple commits into a single PR.
+- **Use separate commits for distinct changes.** When fixing a bug discovered
+  during development of a feature, create a new commit rather than amending
+  the feature commit. This keeps the history readable and makes review easier.
+  Only amend a commit when the change is a trivial correction to that same
+  commit (e.g. a typo introduced in the same diff). If the change has its
+  own logical purpose — such as a bug fix, a config tweak, or a refactor
+  prompted by feedback — it deserves its own commit.
 
 ### General
 
