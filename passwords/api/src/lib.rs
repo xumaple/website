@@ -255,7 +255,11 @@ async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
 // Application builder
 // ---------------------------------------------------------------------------
 
-pub fn build_router() -> Router {
+/// Build the application router, using the supplied burst size for the
+/// rate limiter.  The normal entry point `build_router()` calls this with
+/// [`RATE_LIMIT_BURST_SIZE`]. Tests may pass a much larger value to avoid
+/// accidental 429s during their busy request sequences.
+pub fn build_router_with_burst(burst_size: u32) -> Router {
     let app = Router::new()
         .route("/api/v2/generate", get(generate))
         .route("/api/v2/user", post(create_user).put(update_user))
@@ -276,7 +280,7 @@ pub fn build_router() -> Router {
     // Build the rate limiter configuration.
     let mut rate_limit_builder = GovernorConfigBuilder::default()
         .const_per_millisecond(RATE_LIMIT_REPLENISH_PERIOD_MS)
-        .const_burst_size(RATE_LIMIT_BURST_SIZE);
+        .const_burst_size(burst_size);
     let rate_limit_config = rate_limit_builder
         .finish()
         .expect("invalid rate-limit configuration");
@@ -288,6 +292,11 @@ pub fn build_router() -> Router {
     app.layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
+}
+
+/// Convenience wrapper used throughout the production binary.
+pub fn build_router() -> Router {
+    build_router_with_burst(RATE_LIMIT_BURST_SIZE)
 }
 
 #[cfg(test)]

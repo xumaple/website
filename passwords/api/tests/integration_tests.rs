@@ -25,12 +25,14 @@
 //! ```
 
 use axum::body::Body;
-use axum::Router;
+use axum::{Router, middleware::from_fn, extract::ConnectInfo};
 use http::{Request, StatusCode};
 use mongodb::bson::oid::ObjectId;
-use passwords::build_router;
+use passwords::{build_router, build_router_with_burst};
 use passwords::db;
+use std::net::SocketAddr;
 use std::sync::LazyLock;
+use std::time::Duration;
 use tower::ServiceExt;
 
 const TEST_PW: &str = "test_password_abc123";
@@ -51,13 +53,23 @@ static APP: LazyLock<Router> = LazyLock::new(|| {
     RT.block_on(async {
         dotenv::dotenv().ok();
         db::connect().await.expect("Failed to connect to test DB");
-        build_router()
+        // use a very large burst so ordinary tests aren't disrupted by our
+        // rate limiter; stress test will create its own router below.
+        build_router_with_burst(1_000_000)
     })
 });
 
 /// Returns a fresh clone of the shared router (needed because `oneshot` consumes the service).
 fn app() -> Router {
-    APP.clone()
+    // For tests we never run a real TCP server, so the GovernorLayer's default
+    // PeerIpKeyExtractor would fail to extract a peer IP (leading to 500
+    // errors).  Inject a dummy ConnectInfo using middleware so the rate limiter
+    // sees a valid address on every request.
+    let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+    APP.clone().layer(from_fn(move |mut req: Request<Body>, next: axum::middleware::Next| async move {
+        req.extensions_mut().insert(ConnectInfo(addr));
+        next.run(req).await
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +186,45 @@ fn test_generate_password() {
         assert_eq!(res.status(), StatusCode::OK);
         let pw: String = parse_json(&body_string(res).await);
         assert_eq!(pw.len(), 15); // PASSWORD_LEN
+    });
+}
+
+// Simple stress test to ensure the global rate limiter is enforcing the
+// configured burst size. We hit the `/generate` endpoint repeatedly and
+// expect at least one 429 Too Many Requests once the burst threshold is
+// exceeded. A brief sleep afterward ensures tokens replenish for later
+// tests.
+#[test]
+fn test_rate_limiting() {
+    run(async {
+        // Build a fresh router using the default burst size so we can actually
+        // observe throttling.  We still need the connect-info middleware that
+        // `app()` adds, so copy that behaviour.
+        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        let limited = build_router()
+            .layer(from_fn(move |mut req: Request<Body>, next: axum::middleware::Next| async move {
+                req.extensions_mut().insert(ConnectInfo(addr));
+                next.run(req).await
+            }));
+
+        let mut saw_429 = false;
+        for _ in 0..20 {
+            let req = Request::builder()
+                .method("GET")
+                .uri("/api/v2/generate")
+                .body(Body::empty())
+                .unwrap();
+            let res = limited.clone().oneshot(req).await.unwrap();
+            if res.status() == StatusCode::TOO_MANY_REQUESTS {
+                saw_429 = true;
+                break;
+            }
+        }
+        assert!(saw_429, "expected at least one 429 after burst of requests");
+
+        // ensure the limiter has time to replenish so other tests (if any) aren't
+        // affected.
+        tokio::time::sleep(Duration::from_millis(200)).await;
     });
 }
 
