@@ -90,8 +90,6 @@ let PasswordInput = ({
       .then((response) => {
         if (response.status !== 200) {
           setUploadState(UPLOAD_BAD);
-          console.log("fetching with", key, pw);
-          console.log(response);
           throw new Error("Error while trying to store new password.");
         }
         setUploadState(UPLOAD_GOOD);
@@ -270,7 +268,6 @@ export default function AddPasswordsModal({
   let getCommunicateUploadStateCallback = (el, index) => {
     if (el === IS_UPLOADING) {
       return (newState) => {
-        console.log("previous state: ", passwordInputs.inputs);
         if (newState === UPLOAD_GOOD) {
           // Allows check mark to show up but need to work on animation.
           setTimeout(() => {
@@ -289,7 +286,6 @@ export default function AddPasswordsModal({
   };
 
   let showRemoveMe = passwordInputs.numActivePasswordInputs > 1;
-  console.log(passwordInputs.inputs);
 
   return (
     <div key="AddPasswords">

@@ -38,7 +38,6 @@ export function QueryPassword({
         )
           .then((response) => {
             if (response.status !== 200) {
-              console.log(response);
               throw new Error("Error while trying to get passwords.");
             }
             return response.json();
@@ -50,12 +49,10 @@ export function QueryPassword({
             }
             setRetrieved(newKey);
           })
-          .catch((e) => {
-            console.error(e);
+          .catch(() => {
             setErrorMsg("Unable to retrieve stored passwords at this time.");
           })
           .finally(() => {
-            console.log("Finished retrieving pw");
             hideLoader();
           });
       } else {
@@ -228,7 +225,6 @@ export function NewPassword({
     })
       .then((response) => {
         if (response.status !== 200) {
-          console.log(response);
           throw new Error("Error while trying to get new password.");
         }
         return response.json();
@@ -247,7 +243,6 @@ export function NewPassword({
           }
         ).then((response) => {
           if (response.status !== 200) {
-            console.log(response);
             throw new Error("Error while trying to store new password.");
           }
           addNewKey(key);
