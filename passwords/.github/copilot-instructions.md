@@ -273,6 +273,12 @@ When proposing a change that affects crypto, auth, or data formats:
 
 ### Delegating to Subagents
 
+- **Delegate aggressively to preserve context window.** The main agent's
+  token budget is finite and precious. Kick off code changes, debugging,
+  and research to subagents as early as possible — don't burn tokens
+  investigating a problem yourself before deciding to delegate. Gather
+  only the minimum context needed to write a good subagent prompt (e.g.
+  which CI job failed, the error message), then hand it off immediately.
 - **Always point subagents at this file.** When spawning a subagent, tell
   it to read `passwords/.github/copilot-instructions.md` and follow all
   rules — especially security, uniform error responses, and branching.
