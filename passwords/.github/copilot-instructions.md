@@ -240,6 +240,14 @@ When proposing a change that affects crypto, auth, or data formats:
 - For GitHub operations (creating PRs, issues, etc.), use the **`gh` CLI**
   (`brew install gh`). It is free and does not require a paid subscription.
   Do not rely on GitKraken/GitLens MCP tools for GitHub operations.
+- **Use git worktrees for parallel work.** When working on a separate task
+  (e.g. a docs PR while a feature branch is in progress), create a new
+  worktree instead of switching branches in the main worktree. This avoids
+  disrupting the user's working directory. Example:
+  `git worktree add ../passwords-<feature> -b <branch>`. Clean up finished
+  worktrees with `git worktree remove ../passwords-<feature>`.
+  Subagents must always use a dedicated worktree — never switch branches
+  or make commits in the user's main worktree.
 
 ### Commits & PRs
 
