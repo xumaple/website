@@ -45,6 +45,7 @@ let PasswordInput = ({
 }) => {
   const [key, setKey] = useState("");
   const [pw, setPw] = useState("");
+  const [keyError, setKeyError] = useState("");
   const [currentlyUploading, setCurrentlyUploading] = useState(false);
   const [uploadState, setInnerUploadState] = useState(UPLOAD_PENDING);
 
@@ -67,7 +68,11 @@ let PasswordInput = ({
       return;
     }
 
-    if (key === "" || pw === "") {
+    // UPLOAD_BAD signals that this row cannot be uploaded (missing fields or
+    // validation error). The parent resets the row back to NOT_UPLOADING.
+    // Specific validation errors (e.g. key too long) are surfaced via the
+    // TextField's helperText, not via the upload-state icon.
+    if (key === "" || pw === "" || key.length > 128) {
       setUploadState(UPLOAD_BAD);
       return;
     }
@@ -130,8 +135,16 @@ let PasswordInput = ({
       <TextField
         type="text"
         label="key"
+        error={keyError !== ""}
+        helperText={keyError}
         onChange={(e) => {
-          setKey(e.target.value);
+          const newKey = e.target.value;
+          setKey(newKey);
+          if (newKey.length > 128) {
+            setKeyError("Key is too long (max 128 characters).");
+          } else {
+            setKeyError("");
+          }
         }}
         sx={{
           width: "50%",
@@ -233,9 +246,19 @@ export default function AddPasswordsModal({
       };
     }
     if (action.type === REMOVE) {
+      const newInputs = _changeOne(state.inputs, action.index, null);
+      const newCount = state.numActivePasswordInputs - 1;
+      // When all rows have been removed (e.g. after all uploads succeed),
+      // automatically add a fresh empty row so the modal is never empty.
+      if (newCount === 0) {
+        return {
+          inputs: [...newInputs, NOT_UPLOADING],
+          numActivePasswordInputs: 1,
+        };
+      }
       return {
-        inputs: _changeOne(state.inputs, action.index, null),
-        numActivePasswordInputs: state.numActivePasswordInputs - 1,
+        inputs: newInputs,
+        numActivePasswordInputs: newCount,
       };
     }
     if (action.type === CHANGE_ONE) {

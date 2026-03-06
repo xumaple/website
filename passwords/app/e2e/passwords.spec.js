@@ -150,6 +150,33 @@ test.describe.serial("Full user journey", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // Step 2b: Reject a too-long key in the generate flow
+  // ────────────────────────────────────────────────────────────────────────
+  test("reject a too-long key in generate flow", async () => {
+    // We should still be in the generate view from step 2.
+    await expect(
+      page.getByText("Enter a keyname for your password!")
+    ).toBeVisible();
+
+    // Type a key that exceeds the 128-character limit.
+    await page.getByLabel("New Keyname").fill("a".repeat(129));
+
+    // The inline validation error should appear.
+    await expect(
+      page.getByText("Key is too long (max 128 characters).")
+    ).toBeVisible({ timeout: 5_000 });
+
+    // The Generate button should be disabled.
+    await expect(
+      page.getByRole("button", { name: "Generate" })
+    ).toBeDisabled();
+
+    // Clear the field so subsequent tests start clean.
+    // Stay in new-password view — step 3 opens the drawer from here.
+    await page.getByLabel("New Keyname").fill("");
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // Step 3: Add a password via the sidebar "Manually Add Passwords" modal
   // ────────────────────────────────────────────────────────────────────────
   test("add a manual password via sidebar", async () => {
@@ -189,6 +216,36 @@ test.describe.serial("Full user journey", () => {
     ).not.toBeVisible({ timeout: 10_000 });
 
     // Close the modal by pressing Escape.
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 3b: Reject a key that is too long in the manual-add modal
+  // ────────────────────────────────────────────────────────────────────────
+  test("reject a key that is too long", async () => {
+    // Open the drawer and click "Manually Add Passwords".
+    await page.locator(".user").click();
+    const manualAddBtn = page.getByText("Manually Add Passwords");
+    await expect(manualAddBtn).toBeVisible();
+    await manualAddBtn.click({ timeout: 10_000 });
+
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).toBeVisible();
+
+    // Fill in a key that exceeds the 128-character limit.
+    const modal = page.locator("[role='dialog']");
+    await modal.getByLabel("key").fill("a".repeat(129));
+
+    // The inline validation error should appear on the key field.
+    await expect(
+      modal.getByText("Key is too long (max 128 characters).")
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Close the modal.
     await page.keyboard.press("Escape");
     await expect(
       page.getByRole("heading", { name: "Manually Add Password" })

@@ -2,7 +2,7 @@ pub mod db;
 pub mod encrypt;
 
 use axum::{
-    extract::{FromRequestParts, Path},
+    extract::{rejection::PathRejection, FromRequestParts, Path},
     http::{header::HeaderName, request::Parts, HeaderValue, Method, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -14,12 +14,43 @@ use serde::Deserialize;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
+const MAX_KEY_LENGTH: usize = 128;
+
+fn is_valid_key_length(key: &str) -> bool {
+    key.len() <= MAX_KEY_LENGTH
+}
+
+/// A password key name that has been validated for length.
+pub struct ValidatedKey(pub String);
+
+impl<S> FromRequestParts<S> for ValidatedKey
+where
+    S: Send + Sync,
+{
+    type Rejection = Error;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Path(key) = Path::<String>::from_request_parts(parts, state)
+            .await?;
+        let len = key.len();
+        is_valid_key_length(&key)
+            .then_some(ValidatedKey(key))
+            .ok_or(Error::KeyTooLong(len))
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Error doing cryptography work")]
     CryptoError(#[from] CryptoError),
     #[error("Error accessing database")]
     DbError(#[from] DbError),
+    #[error("Missing or unparseable credentials headers")]
+    MissingCredentials,
+    #[error("Path parameter extraction failed")]
+    InvalidPath(#[from] PathRejection),
+    #[error("Key length {0} exceeds {MAX_KEY_LENGTH}-character limit")]
+    KeyTooLong(usize),
 }
 
 impl IntoResponse for Error {
@@ -72,7 +103,7 @@ impl<S> FromRequestParts<S> for Credentials
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, &'static str);
+    type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let username = parts
@@ -91,7 +122,7 @@ where
                 username: u,
                 password: p,
             }),
-            _ => Err((StatusCode::UNAUTHORIZED, "Missing credentials")),
+            _ => Err(Error::MissingCredentials),
         }
     }
 }
@@ -156,7 +187,7 @@ async fn get_stored_keys(creds: Credentials) -> Result<Json<Vec<String>>, Error>
 #[tracing::instrument(skip(creds))]
 async fn get_stored_password(
     creds: Credentials,
-    Path(key): Path<String>,
+    ValidatedKey(key): ValidatedKey,
 ) -> Result<Json<String>, Error> {
     let pw = db::get_stored_password(creds, key).await?;
     tracing::info!("ok");
@@ -173,7 +204,7 @@ async fn get_stored_passwords(creds: Credentials) -> Result<Json<Vec<String>>, E
 #[tracing::instrument(skip(creds, payload))]
 async fn add_stored_password(
     creds: Credentials,
-    Path(key): Path<String>,
+    ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
     db::add_stored_password(creds, key, payload.encrypted_password).await?;
@@ -184,7 +215,7 @@ async fn add_stored_password(
 #[tracing::instrument(skip(creds, payload))]
 async fn change_stored_password(
     creds: Credentials,
-    Path(key): Path<String>,
+    ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
     db::change_stored_password(creds, key, payload.encrypted_password).await?;
@@ -230,4 +261,26 @@ pub fn build_router() -> Router {
 
     app.layer(TraceLayer::new_for_http())
         .layer(cors_layer())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_at_max_length_is_valid() {
+        let key = "a".repeat(MAX_KEY_LENGTH);
+        assert!(is_valid_key_length(&key));
+    }
+
+    #[test]
+    fn key_exceeding_max_length_is_invalid() {
+        let key = "a".repeat(MAX_KEY_LENGTH + 1);
+        assert!(!is_valid_key_length(&key));
+    }
+
+    #[test]
+    fn empty_key_is_valid() {
+        assert!(is_valid_key_length(""));
+    }
 }
