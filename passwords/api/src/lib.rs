@@ -73,6 +73,11 @@ impl<T> JsonResponse<T> {
 // CORS fairing
 // ---------------------------------------------------------------------------
 
+const ALLOWED_ORIGINS: &[&str] = &[
+    "https://passwords.maplexu.me",
+    "http://localhost:3000",
+];
+
 pub struct Cors;
 
 #[rocket::async_trait]
@@ -84,16 +89,21 @@ impl Fairing for Cors {
         }
     }
 
-    async fn on_response<'r>(&self, _req: &'r Request<'_>, res: &mut RocketResponse<'r>) {
-        res.set_header(Header::new("Access-Control-Allow-Origin", "*"));
-        res.set_header(Header::new(
-            "Access-Control-Allow-Methods",
-            "GET, POST, PUT, DELETE, OPTIONS",
-        ));
-        res.set_header(Header::new(
-            "Access-Control-Allow-Headers",
-            "x-username, x-password, Content-Type",
-        ));
+    async fn on_response<'r>(&self, req: &'r Request<'_>, res: &mut RocketResponse<'r>) {
+        if let Some(origin) = req.headers().get_one("Origin") {
+            if ALLOWED_ORIGINS.contains(&origin) {
+                res.set_header(Header::new("Access-Control-Allow-Origin", origin.to_string()));
+                res.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+                res.set_header(Header::new(
+                    "Access-Control-Allow-Methods",
+                    "GET, POST, PUT, DELETE, OPTIONS",
+                ));
+                res.set_header(Header::new(
+                    "Access-Control-Allow-Headers",
+                    "x-username, x-password, Content-Type",
+                ));
+            }
+        }
     }
 }
 
