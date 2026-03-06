@@ -425,7 +425,7 @@ mod tests {
         
         let updated: Vec<PasswordKV> = original_passwords
             .into_iter()
-            .zip(new_encrypted.into_iter())
+            .zip(new_encrypted)
             .map(|(kv, en_password)| PasswordKV {
                 key: kv.key,
                 en_password,
@@ -442,7 +442,7 @@ mod tests {
     // Test find logic used in get_stored_password
     #[test]
     fn test_find_password_by_key() {
-        let passwords = vec![
+        let passwords = [
             PasswordKV {
                 key: "gmail".to_string(),
                 en_password: "gmail_enc".to_string(),

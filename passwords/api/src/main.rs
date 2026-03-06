@@ -1,6 +1,7 @@
-use passwords::{build_rocket, db};
+use passwords::{build_router, db};
+use tokio::net::TcpListener;
 
-#[rocket::main]
+#[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // Load .env if present (not required — CI provides env vars directly).
     if let Ok(path) = dotenv::dotenv() {
@@ -8,7 +9,10 @@ async fn main() -> Result<(), anyhow::Error> {
     }
     db::connect().await?;
 
-    let _rocket = build_rocket().launch().await?;
+    let app = build_router();
+    let listener = TcpListener::bind("0.0.0.0:8000").await?;
+    println!("Listening on {}", listener.local_addr()?);
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
