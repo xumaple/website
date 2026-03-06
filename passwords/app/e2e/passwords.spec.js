@@ -171,11 +171,9 @@ test.describe.serial("Full user journey", () => {
       page.getByRole("button", { name: "Generate" })
     ).toBeDisabled();
 
-    // Clear the field and go back to query view for subsequent tests.
+    // Clear the field so subsequent tests start clean.
+    // Stay in new-password view — step 4 expects to switch from here.
     await page.getByLabel("New Keyname").fill("");
-    await page
-      .getByRole("button", { name: "Query an existing password" })
-      .click();
   });
 
   // ────────────────────────────────────────────────────────────────────────
