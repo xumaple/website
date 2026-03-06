@@ -1,4 +1,5 @@
 use passwords::{build_router, db};
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
@@ -16,7 +17,7 @@ async fn main() -> Result<(), anyhow::Error> {
     }
     db::connect().await?;
 
-    let app = build_router();
+    let app = build_router().into_make_service_with_connect_info::<SocketAddr>();
     let listener = TcpListener::bind("0.0.0.0:8000").await?;
     tracing::info!(addr = %listener.local_addr()?, "listening");
     axum::serve(listener, app).await?;
