@@ -246,11 +246,12 @@ When proposing a change that affects crypto, auth, or data formats:
   (e.g. a docs PR while a feature branch is in progress), create a new
   worktree instead of switching branches in the main worktree. This avoids
   disrupting the user's working directory. Example:
-  `git worktree add ../passwords-<feature> -b <branch>`. Subagents must
-  always use a dedicated worktree — never switch branches or make commits
-  in the user's main worktree.
+  `git worktree add passwords-<feature> -b <branch>` (from the repo root).
+  Worktrees must be placed inside the repo root, not as siblings.
+  Subagents must always use a dedicated worktree — never switch branches
+  or make commits in the user's main worktree.
 - **Clean up worktrees when done.** After a branch is merged or a task is
-  complete, remove the worktree (`git worktree remove ../passwords-<feature>`)
+  complete, remove the worktree (`git worktree remove passwords-<feature>`)
   and delete the local branch (`git branch -d <branch>`). Do not leave
   stale worktrees accumulating. When beginning a new session, check
   `git worktree list` and clean up any leftover worktrees from previous
