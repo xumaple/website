@@ -349,6 +349,58 @@ test.describe.serial("Full user journey", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // Step 4b: Error message appears when a password query fails
+  // ────────────────────────────────────────────────────────────────────────
+  test("error message appears when password query fails", async () => {
+    // We should be in the query view from step 4.
+    await expect(
+      page.getByText("Select a password to retrieve:")
+    ).toBeVisible();
+
+    // The error div should be invisible initially — it has the -invis class
+    // and its text color matches the background, so Playwright considers it
+    // hidden. We verify the class is present and no visible error is shown.
+    await expect(page.locator(".SignIn-error-invis")).toBeAttached();
+    await expect(page.locator(".SignIn-error")).not.toBeAttached();
+
+    // Intercept the next password fetch and abort it to simulate a failure.
+    await page.route("**/api/v2/passwords/**", (route) => route.abort());
+
+    // Select a key that is NOT already cached — use one of the bulk keys
+    // which were queried in step 3c but the cache is per-component mount,
+    // and we toggled views in step 4, so let's use the generated key which
+    // was already queried. Instead, type a key that triggers a fresh fetch.
+    // Actually, the QueryPassword component caches fetched keys in local
+    // state (kvs). The generated and manual keys were already fetched in
+    // step 4, so selecting them won't trigger a new fetch. The bulk keys
+    // were fetched in step 3c but that was a different component mount
+    // (we toggled to add-password view and back). Let's try one of the
+    // bulk keys since step 4 only queried generated and manual keys.
+    const autocomplete = page.getByRole("combobox", {
+      name: "Select a password key",
+    });
+    await autocomplete.click();
+    await autocomplete.fill("");
+    await autocomplete.fill(ctx.bulkKey1);
+    await page.getByRole("option", { name: ctx.bulkKey1 }).click();
+
+    // The error message should appear.
+    await expect(
+      page.getByText("Unable to retrieve stored passwords at this time.")
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".SignIn-error")).toBeVisible();
+
+    // Remove the route intercept so subsequent tests work normally.
+    await page.unroute("**/api/v2/passwords/**");
+
+    // Wait for the error to auto-clear (10 seconds).
+    await expect(page.locator(".SignIn-error")).not.toBeAttached({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".SignIn-error-invis")).toBeAttached();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // Step 5: Change the master password
   // ────────────────────────────────────────────────────────────────────────
   test("change master password", async () => {
