@@ -48,6 +48,12 @@ const ctx = {
   manualKey: `manual_key_${randomString(6)}`,
   /** The plaintext value of the manually-added password. */
   manualPassword: `ManualPw_${randomString(10)}`,
+  /** Key names for the bulk-added passwords. */
+  bulkKey1: `bulk_key1_${randomString(6)}`,
+  bulkKey2: `bulk_key2_${randomString(6)}`,
+  /** Plaintext values for the bulk-added passwords. */
+  bulkPassword1: `BulkPw1_${randomString(10)}`,
+  bulkPassword2: `BulkPw2_${randomString(10)}`,
   /** The new master password after change. */
   newPassword: `NewPass_${randomString(10)}`, // ≥ 13 chars
 };
@@ -250,6 +256,77 @@ test.describe.serial("Full user journey", () => {
     await expect(
       page.getByRole("heading", { name: "Manually Add Password" })
     ).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 3c: Add two passwords in bulk via the modal and verify both appear
+  // ────────────────────────────────────────────────────────────────────────
+  test("add multiple passwords in bulk — all show up without refresh", async () => {
+    // Open the drawer and click "Manually Add Passwords".
+    await page.locator(".user").click();
+    const manualAddBtn = page.getByText("Manually Add Passwords");
+    await expect(manualAddBtn).toBeVisible();
+    await manualAddBtn.click({ timeout: 10_000 });
+
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).toBeVisible();
+
+    const modal = page.locator("[role='dialog']");
+
+    // Fill in the first key/password pair.
+    await modal.getByLabel("key").fill(ctx.bulkKey1);
+    await modal.getByLabel("password").fill(ctx.bulkPassword1);
+
+    // Add a second row.
+    await modal.getByRole("button", { name: "add another" }).click();
+
+    // Fill in the second key/password pair — there are now two rows.
+    const keyFields = modal.getByLabel("key");
+    const pwFields = modal.getByLabel("password");
+    await keyFields.nth(1).fill(ctx.bulkKey2);
+    await pwFields.nth(1).fill(ctx.bulkPassword2);
+
+    // Save both at once.
+    await modal.getByRole("button", { name: "Save all" }).click();
+
+    // Wait for both rows to finish uploading (both green check icons appear
+    // then disappear after the 2s delay).
+    await expect(page.locator("[data-testid='CheckCircleIcon']").first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.locator("[data-testid='CheckCircleIcon']").first()
+    ).not.toBeVisible({ timeout: 10_000 });
+
+    // Close the modal.
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).not.toBeVisible({ timeout: 5_000 });
+
+    // Switch to query view and confirm BOTH bulk keys are available in the
+    // dropdown — without a page refresh. This is the regression check: before
+    // the fix only the last-uploaded key appeared.
+    await page
+      .getByRole("button", { name: "Query an existing password" })
+      .click();
+    await expect(
+      page.getByText("Select a password to retrieve:")
+    ).toBeVisible();
+
+    // Query first bulk password.
+    await queryAndVerifyPassword(page, ctx.bulkKey1, ctx.bulkPassword1);
+
+    // Query second bulk password.
+    await queryAndVerifyPassword(page, ctx.bulkKey2, ctx.bulkPassword2);
+
+    // Switch back to add-password view so the rest of the suite (step 4) can
+    // start from the right view.
+    await page.getByRole("button", { name: "Add new password" }).click();
+    await expect(
+      page.getByText("Enter a keyname for your password!")
+    ).toBeVisible();
   });
 
   // ────────────────────────────────────────────────────────────────────────
