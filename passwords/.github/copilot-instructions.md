@@ -31,9 +31,10 @@ The repository is hosted on **GitHub** at `xumaple/website`.
 - **Test-only routes**: `DELETE /api/v2/user` is gated behind
   `#[cfg(any(test, debug_assertions, feature = "test-helpers"))]`.
 - **Env vars**: `MONGO_USER`, `MONGO_PW`, `MONGO_ENDPOINT`,
-  `FRONTEND_ORIGIN` (loaded from `api/.env` locally, or from GitHub
-  secrets in CI). `FRONTEND_ORIGIN` should be a list of comma-separated
-  allowed CORS origins.
+  `USERS_DB_NAME`, `FRONTEND_ORIGIN` (loaded from `api/.env` locally, or
+  from GitHub secrets in CI). `FRONTEND_ORIGIN` should be a list of
+  comma-separated allowed CORS origins. `USERS_DB_NAME` is the MongoDB
+  database name.
 - **CORS**: Handled by a tower-http `CorsLayer` built from the
   `FRONTEND_ORIGIN` env var.
 - **Cargo feature**: `test-helpers` — enables the delete-user route for

@@ -81,7 +81,7 @@ impl IntoResponse for Error {
 /// Build a CORS layer from the `FRONTEND_ORIGIN` env var.
 ///
 /// The variable should contain one or more origins separated by commas
-/// (e.g. `https://passwords.maplexu.me,http://localhost:3000`).
+/// (e.g. `https://example.com,http://localhost:3000`).
 /// Panics if the variable is not set.
 fn cors_layer() -> CorsLayer {
     let raw =

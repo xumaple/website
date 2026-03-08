@@ -62,7 +62,8 @@ pub async fn connect() -> Result<(), DbError> {
             )
             .await?,
         )?;
-        Ok::<_, DbError>(client.database("users").collection::<User>("users"))
+        let db_name = std::env::var("USERS_DB_NAME").expect("Need USERS_DB_NAME env variable");
+        Ok::<_, DbError>(client.database(&db_name).collection::<User>("users"))
     })
     .await?;
     Ok(())
