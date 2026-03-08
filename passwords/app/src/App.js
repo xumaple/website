@@ -14,22 +14,22 @@ export default function App() {
   let [isSignedIn, setIsSignedIn] = useState(false);
   let [username, setUsername] = useState("");
   let [en_user, setEnUser] = useState("");
-  let [password, setPassword] = useState("");
+  let [aesKey, setAesKey] = useState("");
   let [en_pw, setEnPw] = useState("");
 
   // const backend = "https://passwords.maplexu.me";
   const backend = "http://localhost:8000";
 
-  const setAccountInfo = (user, en_user, pw, en_pw) => {
+  const setAccountInfo = (user, en_user, derivedAesKey, en_pw) => {
     setUsername(user);
     setEnUser(en_user);
-    setPassword(pw);
+    setAesKey(derivedAesKey);
     setEnPw(en_pw);
     setIsSignedIn(true);
   };
 
   const resetAccountInfo = () => {
-    setPassword("");
+    setAesKey("");
     setIsSignedIn(false);
   };
 
@@ -43,7 +43,7 @@ export default function App() {
               <Account
                 username={username}
                 en_user={en_user}
-                password={password}
+                aesKey={aesKey}
                 en_pw={en_pw}
                 backend={backend}
                 reset={resetAccountInfo}

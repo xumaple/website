@@ -5,7 +5,8 @@ import Button from "@mui/material/Button";
 import { showLoader, hideLoader } from "../../loader/loader";
 import {
   encryptMaster,
-  changePassword,
+  shaHash,
+  changePasswordWithKey,
   checkPassword,
 } from "../../crypto/encrypt";
 import "./settings.css";
@@ -34,15 +35,15 @@ const customStyles = {
 export default function SettingsModal({
   username,
   en_user,
-  password,
+  aesKey,
   en_pw,
   backend,
-  setPassword,
+  setAesKey,
   setEnPassword,
   show,
   stopShowing,
 }) {
-  const [plaintextPw, setPlaintextPw] = useState(password);
+  const [currAesKey, setCurrAesKey] = useState(aesKey);
   const [pw, setPw] = useState(en_pw);
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
@@ -69,18 +70,19 @@ export default function SettingsModal({
       setErrorMsg("Must be a new password");
       return;
     }
+    const newAesKey = shaHash(newPw);
     setNewPw("");
     setNewPw2("");
     setErrorMsg("");
     setIsSaving(true);
     setMsg("Updating password...");
     showLoader();
-    let res = await changePassword(backend, en_user, plaintextPw, pw, newPw, newPwTry);
+    let res = await changePasswordWithKey(backend, en_user, currAesKey, pw, newAesKey, newPwTry);
     if (res) {
       // success
-      setPlaintextPw(newPw);
+      setCurrAesKey(newAesKey);
       setPw(newPwTry);
-      setPassword(newPw);
+      setAesKey(newAesKey);
       setEnPassword(newPwTry);
       setMsg(<div className="green">Password updated successfully.</div>);
     } else {
