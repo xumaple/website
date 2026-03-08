@@ -246,12 +246,13 @@ When proposing a change that affects crypto, auth, or data formats:
   (e.g. a docs PR while a feature branch is in progress), create a new
   worktree instead of switching branches in the main worktree. This avoids
   disrupting the user's working directory. Example:
-  `git worktree add passwords-<feature> -b <branch>` (from the repo root).
-  Worktrees must be placed inside the repo root, not as siblings.
+  `git worktree add worktree-<feature> -b <branch>` (from the repo root).
+  Worktrees must be placed inside the repo root using the `worktree-*`
+  naming convention (gitignored), not as siblings.
   Subagents must always use a dedicated worktree — never switch branches
   or make commits in the user's main worktree.
 - **Clean up worktrees when done.** After a branch is merged or a task is
-  complete, remove the worktree (`git worktree remove passwords-<feature>`)
+  complete, remove the worktree (`git worktree remove worktree-<feature>`)
   and delete the local branch (`git branch -d <branch>`). Do not leave
   stale worktrees accumulating. When beginning a new session, check
   `git worktree list` and clean up any leftover worktrees from previous
@@ -289,6 +290,20 @@ When proposing a change that affects crypto, auth, or data formats:
 - **Subagents may spawn their own subagents.** If a subagent decides a
   subtask is complex enough to delegate further, that is fine — the same
   rules apply recursively.
+- **Never use compound Bash commands.** Commands joined with `&&`, `||`,
+  `;`, or pipes will be rejected by permission rules, which match on the
+  full command string. Issue each command as a separate Bash tool call.
+- **Do not use `isolation: "worktree"` on the Agent tool.** The automatic
+  worktree it creates may check out the wrong ref or be placed in the
+  wrong location. Instead, the **main session** should create a worktree
+  before launching the agent:
+  `git worktree add <repo-root>/worktree-<feature> -b <branch> origin/passwords/master`
+  The worktree must be inside the repo root using the `worktree-*` naming
+  convention (gitignored), never as a sibling or under `.claude/`.
+  Tell the agent the worktree path and instruct it to `cd`
+  into it as its first Bash call — the CWD persists across calls, so all
+  subsequent git/npm commands will run from within the worktree without
+  needing `git -C`. Clean up the worktree from the main session when done.
 
 ### General
 

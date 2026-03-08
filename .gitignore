@@ -8,6 +8,10 @@ build
 .env
 .prod.env
 
+# Claude Code
+.claude/
+worktree-*/
+
 # Playwright
 test-results/
 playwright-report/
