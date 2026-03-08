@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useReducer } from "react";
 import { encryptPwWithKey } from "../crypto/encrypt";
+import { evaluatePasswordStrength } from "../crypto/passwordStrength";
 import Modal from "react-modal";
 import TextField from "@mui/material/TextField";
 import GoodCircle from "@mui/icons-material/CheckCircle";
 import BadCircle from "@mui/icons-material/Error";
 import WaitingCircle from "@mui/icons-material/Pending";
+import WarningIcon from "@mui/icons-material/Warning";
 import Cancel from "@mui/icons-material/Cancel";
 import Button from "@mui/material/Button";
 
@@ -46,6 +48,7 @@ let PasswordInput = ({
   const [key, setKey] = useState("");
   const [pw, setPw] = useState("");
   const [keyError, setKeyError] = useState("");
+  const [passwordStrength, setPasswordStrength] = useState(null);
   const [currentlyUploading, setCurrentlyUploading] = useState(false);
   const [uploadState, setInnerUploadState] = useState(UPLOAD_PENDING);
 
@@ -130,11 +133,26 @@ let PasswordInput = ({
     return "";
   };
 
+  const strengthColor =
+    passwordStrength === "weak"
+      ? "#f44336"
+      : passwordStrength === "fair"
+        ? "#ff9800"
+        : "#4caf50";
+
+  const strengthLabel =
+    passwordStrength === "weak"
+      ? "Weak password"
+      : passwordStrength === "fair"
+        ? "Fair password"
+        : "Strong password";
+
   return (
-    <div className="Manual-password-container">
-      <TextField
-        type="text"
-        label="key"
+    <div>
+      <div className="Manual-password-container">
+        <TextField
+          type="text"
+          label="key"
         error={keyError !== ""}
         helperText={keyError}
         onChange={(e) => {
@@ -169,7 +187,13 @@ let PasswordInput = ({
         type="password"
         label="password"
         onChange={(e) => {
-          setPw(e.target.value);
+          const newPw = e.target.value;
+          setPw(newPw);
+          if (newPw.length > 0) {
+            setPasswordStrength(evaluatePasswordStrength(newPw));
+          } else {
+            setPasswordStrength(null);
+          }
         }}
         sx={{
           width: "50%",
@@ -203,6 +227,23 @@ let PasswordInput = ({
         />
       )}
       {showUploadStatus(uploadState)}
+      </div>
+      {passwordStrength && passwordStrength !== "strong" && (
+        <div
+          className="Password-strength-warning"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            color: strengthColor,
+            fontSize: "0.8rem",
+            marginTop: "4px",
+          }}
+        >
+          <WarningIcon sx={{ fontSize: "1rem", color: strengthColor }} />
+          <span>{strengthLabel}</span>
+        </div>
+      )}
     </div>
   );
 };
