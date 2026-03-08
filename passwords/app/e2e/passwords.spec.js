@@ -366,16 +366,9 @@ test.describe.serial("Full user journey", () => {
     // Intercept the next password fetch and abort it to simulate a failure.
     await page.route("**/api/v2/passwords/**", (route) => route.abort());
 
-    // Select a key that is NOT already cached — use one of the bulk keys
-    // which were queried in step 3c but the cache is per-component mount,
-    // and we toggled views in step 4, so let's use the generated key which
-    // was already queried. Instead, type a key that triggers a fresh fetch.
-    // Actually, the QueryPassword component caches fetched keys in local
-    // state (kvs). The generated and manual keys were already fetched in
-    // step 4, so selecting them won't trigger a new fetch. The bulk keys
-    // were fetched in step 3c but that was a different component mount
-    // (we toggled to add-password view and back). Let's try one of the
-    // bulk keys since step 4 only queried generated and manual keys.
+    // Use bulkKey1 — it wasn't fetched in this component mount (step 4 only
+    // queried generated and manual keys), so selecting it triggers a fresh
+    // API call that hits the route intercept above.
     const autocomplete = page.getByRole("combobox", {
       name: "Select a password key",
     });

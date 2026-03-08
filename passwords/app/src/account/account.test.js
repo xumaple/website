@@ -34,7 +34,7 @@ describe("Account error message display", () => {
   });
 
   test("error div is initially invisible", async () => {
-    // Keys fetch succeeds — mock returns 200 with keys on every call.
+    // Keys fetch succeeds.
     global.fetch = jest.fn(() =>
       Promise.resolve({
         status: 200,
@@ -52,7 +52,7 @@ describe("Account error message display", () => {
   });
 
   test("shows error message when keys fetch fails", async () => {
-    // Keys fetch returns non-200 status on every call.
+    // Keys fetch fails.
     global.fetch = jest.fn(() =>
       Promise.resolve({
         status: 500,
@@ -64,7 +64,6 @@ describe("Account error message display", () => {
       render(<Account {...defaultProps} />);
     });
 
-    // The error message should be displayed with the visible class.
     expect(
       screen.getByText("Unable to retrieve stored passwords at this time.")
     ).toBeInTheDocument();
@@ -105,7 +104,7 @@ describe("Account error message display", () => {
       jest.advanceTimersByTime(10000);
     });
 
-    // Error should now be cleared — div reverts to invisible class.
+    // Error should be cleared.
     expect(document.querySelector(".SignIn-error-invis")).toBeInTheDocument();
     expect(document.querySelector(".SignIn-error")).not.toBeInTheDocument();
   });
