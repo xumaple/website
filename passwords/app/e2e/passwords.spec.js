@@ -229,6 +229,54 @@ test.describe.serial("Full user journey", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // Step 3a2: Warn when a manually entered password is weak
+  // ────────────────────────────────────────────────────────────────────────
+  test("show warning for weak manual password", async () => {
+    // Open the drawer and click "Manually Add Passwords".
+    await page.locator(".user").click();
+    const manualAddBtn = page.getByText("Manually Add Passwords");
+    await expect(manualAddBtn).toBeVisible();
+    await manualAddBtn.click({ timeout: 10_000 });
+
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).toBeVisible();
+
+    const modal = page.locator("[role='dialog']");
+
+    // Type a weak password — too short, single class.
+    await modal.getByLabel("password").fill("abc");
+
+    // A "Weak password" warning should appear.
+    await expect(modal.getByText("Weak password")).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Type a fair password — 8+ chars, two classes.
+    await modal.getByLabel("password").fill("Helloabc");
+
+    // The "Fair password" warning should appear instead.
+    await expect(modal.getByText("Fair password")).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(modal.getByText("Weak password")).not.toBeVisible();
+
+    // Type a strong password — long, multiple classes.
+    await modal.getByLabel("password").fill("MyStr0ng!Pass#99");
+
+    // No warning should appear for a strong password.
+    await expect(modal.getByText("Weak password")).not.toBeVisible();
+    await expect(modal.getByText("Fair password")).not.toBeVisible();
+
+    // Clear and close.
+    await modal.getByLabel("password").fill("");
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("heading", { name: "Manually Add Password" })
+    ).not.toBeVisible({ timeout: 5_000 });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // Step 3b: Reject a key that is too long in the manual-add modal
   // ────────────────────────────────────────────────────────────────────────
   test("reject a key that is too long", async () => {
