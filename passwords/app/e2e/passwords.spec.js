@@ -384,13 +384,8 @@ test.describe.serial("Full user journey", () => {
     await expect(page.locator(".SignIn-error")).toBeVisible();
 
     // Remove the route intercept so subsequent tests work normally.
+    // Auto-clear after 10s is covered by the unit test (account.test.js).
     await page.unroute("**/api/v2/passwords/**");
-
-    // Wait for the error to auto-clear (10 seconds).
-    await expect(page.locator(".SignIn-error")).not.toBeAttached({
-      timeout: 15_000,
-    });
-    await expect(page.locator(".SignIn-error-invis")).toBeAttached();
   });
 
   // ────────────────────────────────────────────────────────────────────────
