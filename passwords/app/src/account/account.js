@@ -37,11 +37,9 @@ export default function Account({
 
   let [keys, setKeys] = useState(undefined);
   const addNewKey = (newKey) => {
-    if (keys === undefined) {
-      setKeys([newKey]);
-    } else {
-      setKeys(keys.concat([newKey]));
-    }
+    setKeys((prevKeys) =>
+      prevKeys === undefined ? [newKey] : prevKeys.concat([newKey])
+    );
   };
   useEffect(() => {
     if (keys === undefined) {
