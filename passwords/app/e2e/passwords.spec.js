@@ -349,6 +349,46 @@ test.describe.serial("Full user journey", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────
+  // Step 4b: Error message appears when a password query fails
+  // ────────────────────────────────────────────────────────────────────────
+  test("error message appears when password query fails", async () => {
+    // We should be in the query view from step 4.
+    await expect(
+      page.getByText("Select a password to retrieve:")
+    ).toBeVisible();
+
+    // The error div should be invisible initially — it has the -invis class
+    // and its text color matches the background, so Playwright considers it
+    // hidden. We verify the class is present and no visible error is shown.
+    await expect(page.locator(".SignIn-error-invis")).toBeAttached();
+    await expect(page.locator(".SignIn-error")).not.toBeAttached();
+
+    // Intercept the next password fetch and abort it to simulate a failure.
+    await page.route("**/api/v2/passwords/**", (route) => route.abort());
+
+    // Use bulkKey1 — it wasn't fetched in this component mount (step 4 only
+    // queried generated and manual keys), so selecting it triggers a fresh
+    // API call that hits the route intercept above.
+    const autocomplete = page.getByRole("combobox", {
+      name: "Select a password key",
+    });
+    await autocomplete.click();
+    await autocomplete.fill("");
+    await autocomplete.fill(ctx.bulkKey1);
+    await page.getByRole("option", { name: ctx.bulkKey1 }).click();
+
+    // The error message should appear.
+    await expect(
+      page.getByText("Unable to retrieve stored passwords at this time.")
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".SignIn-error")).toBeVisible();
+
+    // Remove the route intercept so subsequent tests work normally.
+    // Auto-clear after 10s is covered by the unit test (account.test.js).
+    await page.unroute("**/api/v2/passwords/**");
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // Step 5: Change the master password
   // ────────────────────────────────────────────────────────────────────────
   test("change master password", async () => {

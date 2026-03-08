@@ -125,6 +125,10 @@ Playwright config (`app/playwright.config.js`) auto-starts both servers:
 - Axum API: `cargo run` on port 8000
 - React dev server: `npm start` on port 3000
 
+**Important:** E2E tests require the API server, which needs `api/.env` (MongoDB
+credentials). This is true even when the change is frontend-only. When running
+E2E tests in a worktree, symlink `api/.env` from the main repo before running.
+
 Use `--headed` to watch: `npx playwright test --headed`
 
 ## CI (GitHub Actions)

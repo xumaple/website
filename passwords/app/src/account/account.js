@@ -3,6 +3,7 @@ import SettingsModal from "./settings/settings";
 import { QueryPassword, NewPassword } from "./passwords";
 import AddPasswordsModal from "./addpasswords";
 import { showLoader, hideLoader } from "../loader/loader";
+import { errorColor, backgroundColor } from "../theme";
 import "./account.css";
 import userIcon from "../assets/icons/user-inverted.png";
 import Fab from "@mui/material/Fab";
@@ -19,6 +20,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import AddIcon from "@mui/icons-material/AddCircle";
 
 const TOGGLE_VIEW_DELAY_IN_MS = 300;
+const ERROR_MSG_TIME_IN_MS = 10000;
 
 export default function Account({
   username,
@@ -69,7 +71,13 @@ export default function Account({
     }
   });
 
-  const setErrorMsg = (e) => {};
+  const [errorMsg, setErrorMsgHook] = useState("");
+  const setErrorMsg = (msg) => {
+    setTimeout(() => {
+      setErrorMsgHook("");
+    }, ERROR_MSG_TIME_IN_MS);
+    setErrorMsgHook(msg);
+  };
 
   const setQueryView = (b) => {
     showLoader();
@@ -176,6 +184,18 @@ export default function Account({
             setErrorMsg={setErrorMsg}
           />
         )}
+        <div
+          className={
+            errorMsg.length === 0 ? "SignIn-error-invis" : "SignIn-error"
+          }
+          style={
+            errorMsg.length === 0
+              ? { color: backgroundColor }
+              : { color: errorColor }
+          }
+        >
+          {errorMsg.length === 0 ? "" : errorMsg}
+        </div>
         {!showSettings && (
           <Fab
             variant="extended"
