@@ -1,4 +1,5 @@
 use crate::encrypt::{user2oid, Credentials, CryptoError, MasterKey};
+use crate::env::EnvVars;
 use mongodb::{
     bson::{doc, oid::ObjectId, to_bson, Bson},
     error::Error as MongoError,
@@ -50,19 +51,18 @@ pub enum DbError {
 
 pub async fn connect() -> Result<(), DbError> {
     DB.get_or_try_init(|| async {
+        let env = EnvVars::get();
         let client = Client::with_options(
             ClientOptions::parse(
                 format!(
                     "mongodb+srv://{}:{}@{}?retryWrites=true&w=majority",
-                    std::env::var("MONGO_USER").expect("Need MONGO_USER env variable"),
-                    std::env::var("MONGO_PW").expect("Need MONGO_PW env variable"),
-                    std::env::var("MONGO_ENDPOINT").expect("Need MONGO_ENDPOINT env variable"),
+                    env.mongo_user, env.mongo_pw, env.mongo_endpoint,
                 )
                 .as_str(),
             )
             .await?,
         )?;
-        Ok::<_, DbError>(client.database("users").collection::<User>("users"))
+        Ok::<_, DbError>(client.database(&env.users_db_name).collection::<User>("users"))
     })
     .await?;
     Ok(())
