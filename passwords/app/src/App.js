@@ -1,4 +1,3 @@
-import logo from "./logo.svg";
 import "./App.css";
 import lockIcon from "./assets/icons/lock.png";
 import SignIn from "./account/signIn";

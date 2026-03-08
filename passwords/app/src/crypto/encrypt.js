@@ -38,10 +38,6 @@ function decryptAES(en_text, key) {
   return bytes.toString(Utf8);
 }
 
-export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, newPlaintextPw, newEnPw) {
-  return changePasswordWithKey(backend, en_user, shaHash(oldPlaintextPw), oldEnPw, shaHash(newPlaintextPw), newEnPw);
-}
-
 export async function changePasswordWithKey(backend, en_user, oldAesKey, oldEnPw, newAesKey, newEnPw) {
   let result = await fetch(`${backend}/api/v2/passwords`, {
     method: "GET",
