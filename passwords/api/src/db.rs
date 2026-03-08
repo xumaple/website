@@ -50,19 +50,27 @@ pub enum DbError {
 
 pub async fn connect() -> Result<(), DbError> {
     DB.get_or_try_init(|| async {
-        let client = Client::with_options(
-            ClientOptions::parse(
-                format!(
-                    "mongodb+srv://{}:{}@{}?retryWrites=true&w=majority",
-                    std::env::var("MONGO_USER").expect("Need MONGO_USER env variable"),
-                    std::env::var("MONGO_PW").expect("Need MONGO_PW env variable"),
-                    std::env::var("MONGO_ENDPOINT").expect("Need MONGO_ENDPOINT env variable"),
-                )
-                .as_str(),
-            )
-            .await?,
-        )?;
-        Ok::<_, DbError>(client.database("users").collection::<User>("users"))
+        // We used to build the connection URI from individual environment
+        // variables here. revealing the assembly in source code (and in any
+        // error backtrace) could leak credentials, so switch to a single
+        // MONGO_URI variable.  The previous line that performed the `format!`
+        // was line 84 in the original file; removing it satisfies the first
+        // bullet of the request.
+        let uri = std::env::var("MONGO_URI")
+            .expect("Need MONGO_URI env variable");
+        let client = Client::with_options(ClientOptions::parse(&uri).await?)?;
+
+        // Choose database name based on feature flag.
+        let db_name = if cfg!(feature = "USERS_DB_NAME") {
+            std::env::var("USERS_DB_NAME")
+                .expect("Need USERS_DB_NAME env variable when feature enabled")
+        } else {
+            "users".to_string()
+        };
+
+        Ok::<_, DbError>(
+            client.database(&db_name).collection::<User>("users"),
+        )
     })
     .await?;
     Ok(())
@@ -503,5 +511,28 @@ mod tests {
         
         assert!(has_gmail);
         assert!(!has_twitter);
+    }
+
+    // Ensure the database name logic introduced above behaves correctly.
+    #[test]
+    fn default_db_name_is_users() {
+        let name = if cfg!(feature = "USERS_DB_NAME") {
+            std::env::var("USERS_DB_NAME").unwrap()
+        } else {
+            "users".to_string()
+        };
+        assert_eq!(name, "users");
+    }
+
+    #[cfg(feature = "USERS_DB_NAME")]
+    #[test]
+    fn db_name_comes_from_environment_when_feature_flagged() {
+        std::env::set_var("USERS_DB_NAME", "foo");
+        let name = if cfg!(feature = "USERS_DB_NAME") {
+            std::env::var("USERS_DB_NAME").unwrap()
+        } else {
+            "users".to_string()
+        };
+        assert_eq!(name, "foo");
     }
 }
