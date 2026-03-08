@@ -32,7 +32,10 @@ The repository is hosted on **GitHub** at `xumaple/website`.
   `#[cfg(any(test, debug_assertions, feature = "test-helpers"))]`.
 - **Env vars**: `MONGO_USER`, `MONGO_PW`, `MONGO_ENDPOINT`,
   `USERS_DB_NAME`, `FRONTEND_ORIGIN` (loaded from `api/.env` locally, or
-  from GitHub secrets in CI). `FRONTEND_ORIGIN` should be a list of
+  from GitHub secrets in CI). All env vars are read lazily on first access
+  via the `EnvVars` struct in `env.rs` — add new variables there rather
+  than calling `std::env::var` directly. `FRONTEND_ORIGIN` should be a
+  list of
   comma-separated allowed CORS origins. `USERS_DB_NAME` is the MongoDB
   database name.
 - **CORS**: Handled by a tower-http `CorsLayer` built from the

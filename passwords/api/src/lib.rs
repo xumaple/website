@@ -1,5 +1,6 @@
 pub mod db;
 pub mod encrypt;
+pub mod env;
 
 use axum::{
     extract::{rejection::PathRejection, FromRequestParts, Path},
@@ -10,6 +11,7 @@ use axum::{
 };
 use db::DbError;
 use encrypt::{generate_password, Credentials, CryptoError};
+use env::EnvVars;
 use serde::Deserialize;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
@@ -82,11 +84,9 @@ impl IntoResponse for Error {
 ///
 /// The variable should contain one or more origins separated by commas
 /// (e.g. `https://example.com,http://localhost:3000`).
-/// Panics if the variable is not set.
 fn cors_layer() -> CorsLayer {
-    let raw =
-        std::env::var("FRONTEND_ORIGIN").expect("Need FRONTEND_ORIGIN env variable");
-    let origins: Vec<HeaderValue> = raw
+    let origins: Vec<HeaderValue> = EnvVars::get()
+        .frontend_origin
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
