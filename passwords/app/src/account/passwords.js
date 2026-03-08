@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { showLoader, hideLoader } from "../loader/loader";
-import { encryptPw, decryptPw } from "../crypto/encrypt";
+import { encryptPwWithKey, decryptPwWithKey } from "../crypto/encrypt";
 import Autocomplete from "@mui/material/Autocomplete";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
@@ -14,7 +14,7 @@ import "./account.css";
 export function QueryPassword({
   backend,
   en_user,
-  password,
+  aesKey,
   en_pw,
   keys,
   setErrorMsg
@@ -44,7 +44,7 @@ export function QueryPassword({
           })
           .then((s) => {
             if (!(newKey in kvs)) {
-              kvs[newKey] = decryptPw(password, s);
+              kvs[newKey] = decryptPwWithKey(aesKey, s);
               setKvs(kvs);
             }
             setRetrieved(newKey);
@@ -184,7 +184,7 @@ export function QueryPassword({
 export function NewPassword({
   backend,
   en_user,
-  password,
+  aesKey,
   en_pw,
   keys,
   addNewKey,
@@ -244,7 +244,7 @@ export function NewPassword({
               "x-username": en_user,
               "x-password": en_pw,
             },
-            body: JSON.stringify({ encrypted_password: encryptPw(password, pwval) }),
+            body: JSON.stringify({ encrypted_password: encryptPwWithKey(aesKey, pwval) }),
           }
         ).then((response) => {
           if (response.status !== 200) {

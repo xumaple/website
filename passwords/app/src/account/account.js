@@ -24,14 +24,14 @@ export default function Account({
   username,
   en_user,
   backend,
-  password,
+  aesKey,
   en_pw,
   reset
 }) {
   let [isQueryView, setIsQueryView] = useState(true); // true == queryView; false == newPasswordView
   let [showSettings, setShowSettings] = useState(false);
   let [showAddPasswords, setShowAddPasswords] = useState(false);
-  let [currPassword, setCurrPassword] = useState(password);
+  let [currAesKey, setCurrAesKey] = useState(aesKey);
   let [currEnPw, setCurrEnPw] = useState(en_pw);
   const [open, setOpen] = useState(false);
 
@@ -160,7 +160,7 @@ export default function Account({
           <QueryPassword
             backend={backend}
             en_user={en_user}
-            password={currPassword}
+            aesKey={currAesKey}
             en_pw={currEnPw}
             keys={keys}
             setErrorMsg={setErrorMsg}
@@ -169,7 +169,7 @@ export default function Account({
           <NewPassword
             backend={backend}
             en_user={en_user}
-            password={currPassword}
+            aesKey={currAesKey}
             en_pw={currEnPw}
             keys={keys}
             addNewKey={addNewKey}
@@ -201,16 +201,16 @@ export default function Account({
       <SettingsModal
         username={username}
         en_user={en_user}
-        password={currPassword}
+        aesKey={currAesKey}
         en_pw={currEnPw}
         backend={backend}
-        setPassword={setCurrPassword}
+        setAesKey={setCurrAesKey}
         setEnPassword={setCurrEnPw}
         show={showSettings}
         stopShowing={() => setShowSettings(false)}
       />
       <AddPasswordsModal
-        password={currPassword}
+        aesKey={currAesKey}
         en_user={en_user}
         en_pw={currEnPw}
         backend={backend}

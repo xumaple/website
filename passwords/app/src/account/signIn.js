@@ -2,7 +2,7 @@ import { useState } from "react";
 import { errorColor, backgroundColor, highlightColor } from "../theme";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
-import { encryptMaster, checkPassword } from "../crypto/encrypt";
+import { encryptMaster, shaHash, checkPassword } from "../crypto/encrypt";
 import { showLoader, hideLoader } from "../loader/loader";
 import { useTheme } from "@mui/material/styles";
 import { KeyBinds } from "../util";
@@ -37,6 +37,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     }
     const submittedPw = encryptMaster(password);
     const submittedUser = encryptMaster(username);
+    const aesKey = shaHash(password);
     setPasswordHook("");
     showLoader();
     fetch(
@@ -55,7 +56,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
         if (response.status !== 200) {
           throw new Error("Unable to log in.");
         }
-        setAccountInfo(username, submittedUser, password, submittedPw);
+        setAccountInfo(username, submittedUser, aesKey, submittedPw);
       })
       .catch(() => {
         setErrorMsg(

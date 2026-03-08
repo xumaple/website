@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useReducer } from "react";
-import { encryptPw } from "../crypto/encrypt";
+import { encryptPwWithKey } from "../crypto/encrypt";
 import Modal from "react-modal";
 import TextField from "@mui/material/TextField";
 import GoodCircle from "@mui/icons-material/CheckCircle";
@@ -37,7 +37,7 @@ let PasswordInput = ({
   removeMe,
   showRemoveMe,
   communicateUploadState,
-  password,
+  aesKey,
   en_pw,
   en_user,
   backend,
@@ -89,7 +89,7 @@ let PasswordInput = ({
           "x-username": en_user,
           "x-password": en_pw,
         },
-        body: JSON.stringify({ encrypted_password: encryptPw(password, pw) }),
+        body: JSON.stringify({ encrypted_password: encryptPwWithKey(aesKey, pw) }),
       }
     )
       .then((response) => {
@@ -113,7 +113,7 @@ let PasswordInput = ({
     en_pw,
     en_user,
     key,
-    password,
+    aesKey,
     pw,
   ]);
 
@@ -217,7 +217,7 @@ const CHANGE_ONE = 2;
 const SAVE_ALL = 3;
 
 export default function AddPasswordsModal({
-  password,
+  aesKey,
   en_pw,
   en_user,
   backend,
@@ -335,7 +335,7 @@ export default function AddPasswordsModal({
                       el,
                       i
                     )}
-                    password={password}
+                    aesKey={aesKey}
                     en_pw={en_pw}
                     en_user={en_user}
                     backend={backend}

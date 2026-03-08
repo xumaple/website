@@ -17,6 +17,14 @@ export function decryptPw(mp, en_password) {
   return decryptAES(en_password, shaHash(mp));
 }
 
+export function encryptPwWithKey(aesKey, password) {
+  return encryptAES(password, aesKey);
+}
+
+export function decryptPwWithKey(aesKey, en_password) {
+  return decryptAES(en_password, aesKey);
+}
+
 export function shaHash(text) {
   return sha256(text).toString();
 }
@@ -30,7 +38,7 @@ function decryptAES(en_text, key) {
   return bytes.toString(Utf8);
 }
 
-export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, newPlaintextPw, newEnPw) {
+export async function changePasswordWithKey(backend, en_user, oldAesKey, oldEnPw, newAesKey, newEnPw) {
   let result = await fetch(`${backend}/api/v2/passwords`, {
     method: "GET",
     headers: {
@@ -45,7 +53,7 @@ export async function changePassword(backend, en_user, oldPlaintextPw, oldEnPw, 
       return response.json();
     })
     .then((json) => {
-      const updated_pws = json.map((p) => encryptPw(newPlaintextPw, decryptPw(oldPlaintextPw, p)));
+      const updated_pws = json.map((p) => encryptPwWithKey(newAesKey, decryptPwWithKey(oldAesKey, p)));
       return fetch(`${backend}/api/v2/user`, {
         method: "PUT",
         headers: {
