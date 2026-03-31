@@ -126,20 +126,3 @@ jobs:
           path: passwords/app/playwright-report/
           retention-days: 7
 
-  deploy-api:
-    name: Deploy API to Fly.io
-    runs-on: ubuntu-latest
-    needs: [rust-tests, js-tests, e2e-tests]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    defaults:
-      run:
-        working-directory: passwords/api
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy to Fly.io
-        run: flyctl deploy
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
