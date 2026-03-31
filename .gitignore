@@ -1,3 +1,17 @@
 node_modules
 .vscode
-*/.DS_Store
+.DS_Store
+
+target
+*.pem
+build
+.env
+.prod.env
+
+# Claude Code
+.claude/
+worktree-*/
+
+# Playwright
+test-results/
+playwright-report/

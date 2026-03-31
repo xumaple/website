@@ -1,0 +1,379 @@
+import { useState } from "react";
+import { showLoader, hideLoader } from "../loader/loader";
+import { encryptPwWithKey, decryptPwWithKey } from "../crypto/encrypt";
+import Autocomplete from "@mui/material/Autocomplete";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Alert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
+import AlertTitle from "@mui/material/AlertTitle";
+import CopyToClipboard from "react-copy-to-clipboard";
+import { KeyBinds } from "../util";
+import "./account.css";
+
+export function QueryPassword({
+  backend,
+  en_user,
+  aesKey,
+  en_pw,
+  keys,
+  setErrorMsg
+}) {
+  let [kvs, setKvs] = useState({});
+  let [retrieved, setRetrieved] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const onAcChange = (e, newKey, reason) => {
+    if (newKey !== null) {
+      if (!(newKey in kvs)) {
+        fetch(
+          `${backend}/api/v2/passwords/${encodeURIComponent(newKey)}`,
+          {
+            method: "GET",
+            headers: {
+              "x-username": en_user,
+              "x-password": en_pw,
+            },
+          }
+        )
+          .then((response) => {
+            if (response.status !== 200) {
+              throw new Error("Error while trying to get passwords.");
+            }
+            return response.json();
+          })
+          .then((s) => {
+            if (!(newKey in kvs)) {
+              kvs[newKey] = decryptPwWithKey(aesKey, s);
+              setKvs(kvs);
+            }
+            setRetrieved(newKey);
+          })
+          .catch(() => {
+            setErrorMsg("Unable to retrieve stored passwords at this time.");
+          })
+          .finally(() => {
+            hideLoader();
+          });
+      } else {
+        setRetrieved(newKey);
+      }
+    }
+  };
+
+  const handleClick = () => {
+    setOpen(true);
+  };
+
+  const handleClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+
+    setOpen(false);
+  };
+
+  const action = (
+    <>
+      <Button
+        sx={{
+          color: "white",
+          backgroundColor: "#3f50b5",
+          ":hover": {
+            backgroundColor: "#282c34"
+          },
+          borderRadius: "4px"
+        }}
+        color="primary"
+        variant="contained"
+        size="small"
+        onClick={handleClose}
+      >
+        Close
+      </Button>
+    </>
+  );
+
+  return (
+    <div className="Password-container">
+      <div className="Password-header">Select a password to retrieve:</div>
+      <Autocomplete
+        disablePortal
+        id="my-id"
+        sx={{
+          width: "100%",
+          color: "blue",
+          "& .MuiSvgIcon-root": {
+            color: "black"
+          },
+          "& .MuiIconButton-root ": {
+            marginLeft: "6px"
+          }
+        }}
+        options={keys ? keys : []}
+        autoComplete={true}
+        autoSelect={true}
+        autoHighlight={true}
+        clearOnBlur={true}
+        clearOnEscape={true}
+        selectOnFocus={true}
+        readOnly={keys === undefined}
+        renderInput={(s) => (
+          <TextField
+            {...s}
+            autoFocus={true}
+            label={keys === undefined ? "Loading..." : "Select a password key"}
+            sx={{
+              marginTop: "12px",
+              marginBottom: "24px",
+              fieldset: { borderColor: "black" },
+              input: { color: "black" },
+              label: { color: "black" },
+              "& .MuiOutlinedInput-root": {
+                "&.Mui-focused fieldset": {
+                  borderColor: "#3f50b5"
+                }
+              },
+              "&:hover fieldset": {
+                borderColor: "#3f50b5 !important"
+              }
+            }}
+            InputLabelProps={{
+              sx: { "&.Mui-focused": { color: "#3f50b5" } }
+            }}
+          />
+        )}
+        onChange={onAcChange}
+      />
+      {retrieved !== "" && (
+        <div style={{ width: "100%" }}>
+          <CopyToClipboard
+            onCopy={() => {
+              handleClick();
+            }}
+            text={kvs[retrieved]}
+          >
+            <Alert
+              sx={{
+                textAlign: "left",
+                ":hover": {
+                  backgroundColor: "black",
+                  cursor: "copy"
+                }
+              }}
+              severity="info"
+            >
+              <AlertTitle> Retrieved password for {retrieved}!</AlertTitle>
+              Click here to copy.
+            </Alert>
+          </CopyToClipboard>
+        </div>
+      )}
+      <Snackbar
+        open={open}
+        autoHideDuration={6000}
+        onClose={handleClose}
+        message="Password Copied!"
+        action={action}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
+    </div>
+  );
+}
+
+export function NewPassword({
+  backend,
+  en_user,
+  aesKey,
+  en_pw,
+  keys,
+  addNewKey,
+  setErrorMsg
+}) {
+  const [key, setKey] = useState("");
+  const [keyError, setKeyError] = useState("");
+  const [copyText, setCopyText] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const onKeyPress = (e) => {
+    if (e.charCode === KeyBinds.ENTER) {
+      submit();
+    }
+  };
+
+  const handleClick = () => {
+    setOpen(true);
+  };
+
+  const handleClose = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+
+    setOpen(false);
+  };
+
+  const submit = () => {
+    if (key === "") {
+      setErrorMsg("Must specify a key to generate.");
+    }
+    if (key.length > 128) {
+      setErrorMsg("Key name is too long (max 128 characters).");
+      return;
+    }
+    if (key in keys) {
+      setErrorMsg("You already have a key of this name!");
+    }
+    showLoader();
+    fetch(`${backend}/api/v2/generate`, {
+      method: "GET"
+    })
+      .then((response) => {
+        if (response.status !== 200) {
+          throw new Error("Error while trying to get new password.");
+        }
+        return response.json();
+      })
+      .then((pwval) => {
+        fetch(
+          `${backend}/api/v2/passwords/${encodeURIComponent(key)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-username": en_user,
+              "x-password": en_pw,
+            },
+            body: JSON.stringify({ encrypted_password: encryptPwWithKey(aesKey, pwval) }),
+          }
+        ).then((response) => {
+          if (response.status !== 200) {
+            throw new Error("Error while trying to store new password.");
+          }
+          addNewKey(key);
+          setKey("");
+          setCopyText(pwval);
+        });
+      })
+      .finally(() => {
+        hideLoader();
+      });
+  };
+
+  const action = (
+    <>
+      <Button
+        sx={{
+          color: "white",
+          backgroundColor: "#3f50b5",
+          ":hover": {
+            backgroundColor: "#282c34"
+          },
+          borderRadius: "4px"
+        }}
+        color="primary"
+        variant="contained"
+        size="small"
+        onClick={handleClose}
+      >
+        Close
+      </Button>
+    </>
+  );
+
+  return (
+    <div className="Password-container">
+      <div className="Password-header">Enter a keyname for your password!</div>
+      <TextField
+        label="New Keyname"
+        type="text"
+        error={keyError !== ""}
+        helperText={keyError}
+        onChange={(e) => {
+          const newKey = e.target.value;
+          setKey(newKey);
+          if (newKey.length > 128) {
+            setKeyError("Key is too long (max 128 characters).");
+          } else {
+            setKeyError("");
+          }
+        }}
+        value={key}
+        autoFocus={true}
+        onKeyPress={onKeyPress}
+        sx={{
+          width: "100%",
+          marginTop: "12px",
+          marginBottom: "24px",
+          fieldset: { borderColor: "black" },
+          input: { color: "black" },
+          label: { color: "black" },
+          "& .MuiOutlinedInput-root": {
+            "&.Mui-focused fieldset": {
+              borderColor: "#3f50b5"
+            }
+          },
+          "&:hover fieldset": {
+            borderColor: "#3f50b5 !important"
+          }
+        }}
+        InputLabelProps={{
+          sx: { "&.Mui-focused": { color: "#3f50b5" } }
+        }}
+      />
+      <Button
+        disabled={keyError !== ""}
+        sx={{
+          width: "100%",
+          height: "45px",
+          borderRadius: "8px",
+          marginTop: "8px",
+          backgroundColor: "#282c34",
+          ":hover": {
+            backgroundColor: "#3f50b5"
+          },
+          fontWeight: "bold",
+          color: "white"
+        }}
+        type="button"
+        onClick={submit}
+      >
+        Generate
+      </Button>
+      <div style={{ width: "100%", marginTop: "16px" }}>
+        {copyText !== "" && (
+          <div style={{ width: "100%" }}>
+            <CopyToClipboard
+              onCopy={() => {
+                handleClick();
+              }}
+              text={copyText}
+            >
+              <Alert
+                sx={{
+                  textAlign: "left",
+                  ":hover": {
+                    backgroundColor: "black",
+                    cursor: "copy"
+                  }
+                }}
+                severity="info"
+              >
+                <AlertTitle>Generated a new password!</AlertTitle>
+                Click here to copy.
+              </Alert>
+            </CopyToClipboard>
+          </div>
+        )}
+      </div>
+      <Snackbar
+        open={open}
+        autoHideDuration={6000}
+        onClose={handleClose}
+        message="Password Copied!"
+        action={action}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
+    </div>
+  );
+}
