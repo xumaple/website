@@ -2,11 +2,11 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, master, passwords/master]
+    branches: [main]
     paths:
       - "passwords/**"
   push:
-    branches: [main, master, passwords/master]
+    branches: [main]
     paths:
       - "passwords/**"
 
@@ -125,3 +125,4 @@ jobs:
           name: playwright-report
           path: passwords/app/playwright-report/
           retention-days: 7
+
