@@ -236,11 +236,11 @@ When proposing a change that affects crypto, auth, or data formats:
 
 ### Branching
 
-- The main branch for this project is **`passwords/master`**.
+- The main branch for this project is **`main`**.
 - Feature branches should be named `xumaple/<feature>` when the user drives
   most of the work, or `xumaple/copilot/<feature>` when Copilot does the
   majority of the implementation.
-- PRs should target `passwords/master`.
+- PRs should target `main`.
 - **Start from a clean base.** Before beginning new work, make sure you are
   on the main branch with the latest changes. If there are uncommitted
   changes, stash them first (`git stash`), switch to main and pull, then
