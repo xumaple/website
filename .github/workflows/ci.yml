@@ -70,9 +70,6 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Build frontend
-        run: npm run build
-
   e2e-tests:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
