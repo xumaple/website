@@ -16,8 +16,7 @@ export default function App() {
   let [aesKey, setAesKey] = useState("");
   let [en_pw, setEnPw] = useState("");
 
-  // const backend = "https://passwords.maplexu.me";
-  const backend = "http://localhost:8000";
+  const backend = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 
   const setAccountInfo = (user, en_user, derivedAesKey, en_pw) => {
     setUsername(user);
