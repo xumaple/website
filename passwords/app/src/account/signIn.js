@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { errorColor, backgroundColor, highlightColor } from "../theme";
+import { errorColor, backgroundColor } from "../theme";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import { encryptMaster, shaHash, checkPassword } from "../crypto/encrypt";
 import { showLoader, hideLoader } from "../loader/loader";
-import { useTheme } from "@mui/material/styles";
 import { KeyBinds } from "../util";
 import "./account.css";
 
@@ -12,7 +11,6 @@ const ERROR_MSG_TIME_IN_MS = 10000;
 const TOGGLE_CREATE_ACCOUNT_DELAY_IN_MS = 300;
 
 export default function SignIn({ user, backend, setAccountInfo }) {
-  const theme = useTheme();
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [errorMsg, setErrorMsgHook] = useState("");
   const setErrorMsg = (msg) => {
