@@ -28,7 +28,7 @@ use axum::body::Body;
 use axum::{Router, middleware::from_fn, extract::ConnectInfo};
 use http::{Request, StatusCode};
 use mongodb::bson::oid::ObjectId;
-use passwords::{build_router, build_router_with_burst};
+use passwords::{build_router_with_burst, install_prometheus_recorder};
 use passwords::db;
 use std::net::SocketAddr;
 use std::sync::LazyLock;
@@ -49,13 +49,17 @@ static RT: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
         .expect("Failed to create shared tokio runtime")
 });
 
+/// Shared Prometheus handle — installed once; cloned into any router that needs it.
+static PROM_HANDLE: LazyLock<metrics_exporter_prometheus::PrometheusHandle> =
+    LazyLock::new(install_prometheus_recorder);
+
 static APP: LazyLock<Router> = LazyLock::new(|| {
     RT.block_on(async {
         dotenv::dotenv().ok();
         db::connect().await.expect("Failed to connect to test DB");
         // use a very large burst so ordinary tests aren't disrupted by our
         // rate limiter; stress test will create its own router below.
-        build_router_with_burst(1_000_000)
+        build_router_with_burst(1_000_000, PROM_HANDLE.clone())
     })
 });
 
@@ -189,6 +193,38 @@ fn test_generate_password() {
     });
 }
 
+#[test]
+fn test_metrics_endpoint() {
+    run(async {
+        // Make a request first so that metrics are recorded.
+        let warmup = Request::builder()
+            .method("GET")
+            .uri("/api/v2/generate")
+            .body(Body::empty())
+            .unwrap();
+        let warmup_res = app().oneshot(warmup).await.unwrap();
+        assert_eq!(warmup_res.status(), StatusCode::OK);
+
+        // Now fetch /metrics and verify the Prometheus exposition format.
+        let req = Request::builder()
+            .method("GET")
+            .uri("/metrics")
+            .body(Body::empty())
+            .unwrap();
+        let res = app().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = body_string(res).await;
+        assert!(
+            body.contains("http_requests_total"),
+            "expected http_requests_total counter in /metrics response",
+        );
+        assert!(
+            body.contains("http_request_duration_seconds"),
+            "expected http_request_duration_seconds histogram in /metrics response",
+        );
+    });
+}
+
 // Simple stress test to ensure the global rate limiter is enforcing the
 // configured burst size. We hit the `/generate` endpoint repeatedly and
 // expect at least one 429 Too Many Requests once the burst threshold is
@@ -201,7 +237,7 @@ fn test_rate_limiting() {
         // observe throttling.  We still need the connect-info middleware that
         // `app()` adds, so copy that behaviour.
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-        let limited = build_router()
+        let limited = build_router_with_burst(10, PROM_HANDLE.clone())
             .layer(from_fn(move |mut req: Request<Body>, next: axum::middleware::Next| async move {
                 req.extensions_mut().insert(ConnectInfo(addr));
                 next.run(req).await
