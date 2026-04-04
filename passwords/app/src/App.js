@@ -18,7 +18,7 @@ export default function App() {
 
   const backend = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 
-  // Fire-and-forget ping to wake up the backend server (Fly.io cold start).
+  // Fire-and-forget ping to wake up the backend server (cold start).
   useEffect(() => {
     fetch(`${backend}/`).catch(() => {});
   }, [backend]);
