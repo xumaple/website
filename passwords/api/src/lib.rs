@@ -3,7 +3,7 @@ pub mod encrypt;
 pub mod env;
 
 use axum::{
-    extract::{rejection::PathRejection, Extension, FromRequestParts, Path},
+    extract::{rejection::PathRejection, FromRequestParts, Path, State},
     http::{header::HeaderName, request::Parts, HeaderValue, Method, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -181,7 +181,7 @@ async fn generate() -> Result<Json<String>, Error> {
 
 #[tracing::instrument(skip(creds, locks))]
 async fn create_user(
-    Extension(locks): Extension<UserLocks>,
+    State(locks): State<UserLocks>,
     creds: Credentials,
 ) -> Result<StatusCode, Error> {
     let oid = user2oid(&creds.username);
@@ -201,7 +201,7 @@ async fn verify_user(creds: Credentials) -> Result<StatusCode, Error> {
 
 #[tracing::instrument(skip(creds, locks, payload))]
 async fn update_user(
-    Extension(locks): Extension<UserLocks>,
+    State(locks): State<UserLocks>,
     creds: Credentials,
     Json(payload): Json<UpdateUserPayload>,
 ) -> Result<StatusCode, Error> {
@@ -239,7 +239,7 @@ async fn get_stored_passwords(creds: Credentials) -> Result<Json<Vec<String>>, E
 
 #[tracing::instrument(skip(creds, locks, payload))]
 async fn add_stored_password(
-    Extension(locks): Extension<UserLocks>,
+    State(locks): State<UserLocks>,
     creds: Credentials,
     ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
@@ -254,7 +254,7 @@ async fn add_stored_password(
 
 #[tracing::instrument(skip(creds, locks, payload))]
 async fn change_stored_password(
-    Extension(locks): Extension<UserLocks>,
+    State(locks): State<UserLocks>,
     creds: Credentials,
     ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
@@ -276,7 +276,7 @@ async fn root() -> &'static str {
 #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
 #[tracing::instrument(skip(creds, locks))]
 async fn delete_user(
-    Extension(locks): Extension<UserLocks>,
+    State(locks): State<UserLocks>,
     creds: Credentials,
 ) -> Result<StatusCode, Error> {
     let oid = user2oid(&creds.username);
@@ -324,10 +324,10 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
         .expect("invalid rate-limit configuration");
 
     // Layers wrap routes that were registered *before* the .layer() call.
-    // Order (outermost → innermost): CORS → rate-limit → tracing → Extension → handler.
+    // Order (outermost → innermost): CORS → rate-limit → tracing → handler.
     // CORS must be outermost so preflight OPTIONS responses are never blocked
-    // by the rate limiter.
-    app.layer(Extension(user_locks))
+    // by the rate limiter.  UserLocks are provided via .with_state() (not a layer).
+    app.with_state(user_locks)
         .layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
