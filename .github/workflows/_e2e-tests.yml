@@ -1,0 +1,61 @@
+name: E2E Tests
+
+on:
+  workflow_call:
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    env:
+      MONGO_USER: ${{ secrets.MONGO_USER }}
+      MONGO_PW: ${{ secrets.MONGO_PW }}
+      MONGO_ENDPOINT: ${{ secrets.MONGO_ENDPOINT }}
+      USERS_DB_NAME: ${{ secrets.USERS_DB_NAME }}
+      FRONTEND_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            passwords/api/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('passwords/api/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build API (debug)
+        working-directory: passwords/api
+        run: cargo build
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: passwords/app/package-lock.json
+
+      - name: Install JS dependencies
+        working-directory: passwords/app
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: passwords/app
+        run: npx playwright install chromium --with-deps
+
+      - name: Run e2e tests
+        working-directory: passwords/app
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: passwords/app/playwright-report/
+          retention-days: 7
