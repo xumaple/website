@@ -9,6 +9,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use axum_prometheus::PrometheusMetricLayer;
 use db::DbError;
 use encrypt::{generate_password, Credentials, CryptoError};
 use env::EnvVars;
@@ -255,11 +256,8 @@ async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
 // Application builder
 // ---------------------------------------------------------------------------
 
-/// Build the application router, using the supplied burst size for the
-/// rate limiter.  The normal entry point `build_router()` calls this with
-/// [`RATE_LIMIT_BURST_SIZE`]. Tests may pass a much larger value to avoid
-/// accidental 429s during their busy request sequences.
-pub fn build_router_with_burst(burst_size: u32) -> Router {
+/// Register all application routes (including conditional test-only routes).
+fn app_routes() -> Router {
     let app = Router::new()
         .route("/api/v2/generate", get(generate))
         .route("/api/v2/user", post(create_user).put(update_user))
@@ -277,6 +275,27 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
     #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
     let app = app.route("/api/v2/user", axum::routing::delete(delete_user));
 
+    app
+}
+
+/// Build the application router, using the supplied burst size for the
+/// rate limiter.
+///
+/// The Prometheus metric layer and `/metrics` endpoint are created
+/// internally via [`PrometheusMetricLayer::pair()`]. Because the
+/// underlying `metrics` crate only allows a single global recorder,
+/// this function must be called **at most once per process**.
+///
+/// The normal entry point `build_router()` calls this with
+/// [`RATE_LIMIT_BURST_SIZE`].
+/// Tests may pass a much larger burst value to avoid accidental 429s
+/// during their busy request sequences.
+pub fn build_router_with_burst(burst_size: u32) -> Router {
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
+    let app = app_routes()
+        .route("/metrics", get(|| async move { metric_handle.render() }));
+
     // Build the rate limiter configuration.
     let mut rate_limit_builder = GovernorConfigBuilder::default()
         .const_per_millisecond(RATE_LIMIT_REPLENISH_PERIOD_MS)
@@ -286,15 +305,37 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
         .expect("invalid rate-limit configuration");
 
     // Layers wrap routes that were registered *before* the .layer() call.
-    // Order (outermost → innermost): CORS → rate-limit → tracing → handler.
+    // Order (outermost → innermost): CORS → rate-limit → prometheus → tracing → handler.
     // CORS must be outermost so preflight OPTIONS responses are never blocked
-    // by the rate limiter.
+    // by the rate limiter. The prometheus middleware is inside rate-limiting so
+    // that only non-throttled requests are measured.
+    app.layer(prometheus_layer)
+        .layer(TraceLayer::new_for_http())
+        .layer(GovernorLayer::new(rate_limit_config))
+        .layer(cors_layer())
+}
+
+/// Build a router with the given burst size but **without** installing
+/// a Prometheus recorder.  Useful in tests that need a separate router
+/// (e.g. to test rate-limiting with a small burst) when the global
+/// recorder has already been installed by another router in the same
+/// process.
+pub fn build_router_with_burst_no_metrics(burst_size: u32) -> Router {
+    let app = app_routes();
+
+    let mut rate_limit_builder = GovernorConfigBuilder::default()
+        .const_per_millisecond(RATE_LIMIT_REPLENISH_PERIOD_MS)
+        .const_burst_size(burst_size);
+    let rate_limit_config = rate_limit_builder
+        .finish()
+        .expect("invalid rate-limit configuration");
+
     app.layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
 }
 
-/// Convenience wrapper used throughout the production binary.
+/// Convenience wrapper used by the production binary.
 pub fn build_router() -> Router {
     build_router_with_burst(RATE_LIMIT_BURST_SIZE)
 }
