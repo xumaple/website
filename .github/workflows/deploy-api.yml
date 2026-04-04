@@ -1,0 +1,37 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "passwords/api/**"
+
+jobs:
+  rust-tests:
+    uses: ./.github/workflows/_rust-tests.yml
+    secrets: inherit
+
+  js-tests:
+    uses: ./.github/workflows/_js-tests.yml
+    secrets: inherit
+
+  e2e-tests:
+    uses: ./.github/workflows/_e2e-tests.yml
+    secrets: inherit
+
+  deploy:
+    name: Deploy API to Fly.io
+    needs: [rust-tests, js-tests, e2e-tests]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: passwords/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
