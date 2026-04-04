@@ -3,20 +3,32 @@ pub mod encrypt;
 pub mod env;
 
 use axum::{
-    extract::{rejection::PathRejection, FromRequestParts, Path},
+    extract::{rejection::PathRejection, Extension, FromRequestParts, Path},
     http::{header::HeaderName, request::Parts, HeaderValue, Method, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
+use dashmap::DashMap;
 use db::DbError;
-use encrypt::{generate_password, Credentials, CryptoError};
+use encrypt::{generate_password, user2oid, Credentials, CryptoError};
 use env::EnvVars;
+use mongodb::bson::oid::ObjectId;
 use serde::Deserialize;
+use std::sync::Arc;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+
+// ---------------------------------------------------------------------------
+// Per-user lock map for serializing mutating requests
+// ---------------------------------------------------------------------------
+
+/// A shared map from user ObjectId to a per-user async mutex.
+/// All mutating (write) handlers acquire the lock for the target user before
+/// proceeding, preventing race conditions on concurrent writes.
+pub type UserLocks = Arc<DashMap<ObjectId, Arc<tokio::sync::Mutex<()>>>>;
 
 const MAX_KEY_LENGTH: usize = 128;
 
@@ -167,8 +179,14 @@ async fn generate() -> Result<Json<String>, Error> {
     Ok(Json(pw))
 }
 
-#[tracing::instrument(skip(creds))]
-async fn create_user(creds: Credentials) -> Result<StatusCode, Error> {
+#[tracing::instrument(skip(creds, locks))]
+async fn create_user(
+    Extension(locks): Extension<UserLocks>,
+    creds: Credentials,
+) -> Result<StatusCode, Error> {
+    let oid = user2oid(&creds.username);
+    let mutex = locks.entry(oid).or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))).clone();
+    let _guard = mutex.lock().await;
     db::add_user(creds).await?;
     tracing::info!("ok");
     Ok(StatusCode::OK)
@@ -181,11 +199,15 @@ async fn verify_user(creds: Credentials) -> Result<StatusCode, Error> {
     Ok(StatusCode::OK)
 }
 
-#[tracing::instrument(skip(creds, payload))]
+#[tracing::instrument(skip(creds, locks, payload))]
 async fn update_user(
+    Extension(locks): Extension<UserLocks>,
     creds: Credentials,
     Json(payload): Json<UpdateUserPayload>,
 ) -> Result<StatusCode, Error> {
+    let oid = user2oid(&creds.username);
+    let mutex = locks.entry(oid).or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))).clone();
+    let _guard = mutex.lock().await;
     db::change_master_password(creds, payload.new_password, payload.passwords).await?;
     tracing::info!("ok");
     Ok(StatusCode::OK)
@@ -215,23 +237,31 @@ async fn get_stored_passwords(creds: Credentials) -> Result<Json<Vec<String>>, E
     Ok(Json(pws))
 }
 
-#[tracing::instrument(skip(creds, payload))]
+#[tracing::instrument(skip(creds, locks, payload))]
 async fn add_stored_password(
+    Extension(locks): Extension<UserLocks>,
     creds: Credentials,
     ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
+    let oid = user2oid(&creds.username);
+    let mutex = locks.entry(oid).or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))).clone();
+    let _guard = mutex.lock().await;
     db::add_stored_password(creds, key, payload.encrypted_password).await?;
     tracing::info!("ok");
     Ok(StatusCode::OK)
 }
 
-#[tracing::instrument(skip(creds, payload))]
+#[tracing::instrument(skip(creds, locks, payload))]
 async fn change_stored_password(
+    Extension(locks): Extension<UserLocks>,
     creds: Credentials,
     ValidatedKey(key): ValidatedKey,
     Json(payload): Json<PasswordPayload>,
 ) -> Result<StatusCode, Error> {
+    let oid = user2oid(&creds.username);
+    let mutex = locks.entry(oid).or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))).clone();
+    let _guard = mutex.lock().await;
     db::change_stored_password(creds, key, payload.encrypted_password).await?;
     tracing::info!("ok");
     Ok(StatusCode::OK)
@@ -244,8 +274,14 @@ async fn root() -> &'static str {
 
 /// Delete a user. Only available in debug/test builds for cleanup.
 #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
-#[tracing::instrument(skip(creds))]
-async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
+#[tracing::instrument(skip(creds, locks))]
+async fn delete_user(
+    Extension(locks): Extension<UserLocks>,
+    creds: Credentials,
+) -> Result<StatusCode, Error> {
+    let oid = user2oid(&creds.username);
+    let mutex = locks.entry(oid).or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))).clone();
+    let _guard = mutex.lock().await;
     db::delete_user(creds.username).await?;
     tracing::info!("ok");
     Ok(StatusCode::OK)
@@ -260,6 +296,8 @@ async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
 /// [`RATE_LIMIT_BURST_SIZE`]. Tests may pass a much larger value to avoid
 /// accidental 429s during their busy request sequences.
 pub fn build_router_with_burst(burst_size: u32) -> Router {
+    let user_locks: UserLocks = Arc::new(DashMap::new());
+
     let app = Router::new()
         .route("/api/v2/generate", get(generate))
         .route("/api/v2/user", post(create_user).put(update_user))
@@ -286,10 +324,11 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
         .expect("invalid rate-limit configuration");
 
     // Layers wrap routes that were registered *before* the .layer() call.
-    // Order (outermost → innermost): CORS → rate-limit → tracing → handler.
+    // Order (outermost → innermost): CORS → rate-limit → tracing → Extension → handler.
     // CORS must be outermost so preflight OPTIONS responses are never blocked
     // by the rate limiter.
-    app.layer(TraceLayer::new_for_http())
+    app.layer(Extension(user_locks))
+        .layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
 }

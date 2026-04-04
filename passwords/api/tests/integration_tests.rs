@@ -34,6 +34,7 @@ use std::net::SocketAddr;
 use std::sync::LazyLock;
 use std::time::Duration;
 use tower::ServiceExt;
+use std::sync::Arc;
 
 const TEST_PW: &str = "test_password_abc123";
 
@@ -812,5 +813,85 @@ fn test_change_master_no_stored_passwords() {
             .unwrap();
         let res = app().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK, "new pw works after master change");
+    });
+}
+
+// ── Concurrency tests ────────────────────────────────────────────────────
+
+/// Verify that concurrent password additions to the same user are serialized
+/// by the per-user lock and no data is lost.
+///
+/// Without locking, two concurrent `add_stored_password` calls could both
+/// read the same user document (with no stored passwords), each decide the
+/// key does not exist yet, and both attempt to push — potentially resulting
+/// in a duplicate key or one write silently overwriting the other. The
+/// per-user mutex ensures these operations run sequentially.
+#[test]
+fn test_concurrent_password_adds_are_serialized() {
+    run(async {
+        let t = TestUser::new();
+        let (user, pw) = (t.user(), t.pw());
+
+        // Create user
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v2/user")
+            .auth(user, pw)
+            .body(Body::empty())
+            .unwrap();
+        let res = app().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK, "create user");
+
+        // Fire N concurrent add-password requests with distinct keys
+        let n = 10;
+        let user = Arc::new(user.to_string());
+        let pw = Arc::new(pw.to_string());
+
+        let mut handles = Vec::with_capacity(n);
+        for i in 0..n {
+            let user = Arc::clone(&user);
+            let pw = Arc::clone(&pw);
+            let handle = tokio::spawn(async move {
+                let key = format!("concurrent_key_{i}");
+                let val = format!("enc_val_{i}");
+                let req = Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v2/passwords/{key}"))
+                    .header("x-username", user.as_str())
+                    .header("x-password", pw.as_str())
+                    .header("content-type", "application/json")
+                    .body(Body::from(format!(r#"{{"encrypted_password":"{val}"}}"#)))
+                    .unwrap();
+                let res = app().oneshot(req).await.unwrap();
+                assert_eq!(
+                    res.status(),
+                    StatusCode::OK,
+                    "concurrent add key {key} failed"
+                );
+            });
+            handles.push(handle);
+        }
+
+        for h in handles {
+            h.await.expect("task panicked");
+        }
+
+        // Verify all N keys are present
+        let req = Request::builder()
+            .method("GET")
+            .uri("/api/v2/keys")
+            .header("x-username", user.as_str())
+            .header("x-password", pw.as_str())
+            .body(Body::empty())
+            .unwrap();
+        let res = app().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let keys: Vec<String> = parse_json(&body_string(res).await);
+        assert_eq!(
+            keys.len(),
+            n,
+            "expected {n} keys after concurrent adds, got {}: {keys:?}",
+            keys.len()
+        );
     });
 }
