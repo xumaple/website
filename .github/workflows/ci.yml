@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "passwords/**"
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
       - "passwords/**"
+      - ".github/workflows/**"
 
 jobs:
   rust-tests:
