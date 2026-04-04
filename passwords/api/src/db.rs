@@ -184,10 +184,8 @@ pub async fn add_stored_password(
     key: String,
     encrypted_password: String,
 ) -> Result<(), DbError> {
-    let en_user = user2oid(&creds.username);
-    let _guard = acquire_user_lock(en_user).await;
-
     let (db, user, en_user) = authenticate_user(creds).await?;
+    let _guard = acquire_user_lock(en_user).await;
 
     if user
         .stored_passwords
@@ -221,10 +219,8 @@ pub async fn change_stored_password(
     key: String,
     encrypted_password: String,
 ) -> Result<(), DbError> {
-    let en_user = user2oid(&creds.username);
-    let _guard = acquire_user_lock(en_user).await;
-
     let (db, user, en_user) = authenticate_user(creds).await?;
+    let _guard = acquire_user_lock(en_user).await;
 
     user.stored_passwords
         .into_iter()
@@ -253,10 +249,8 @@ pub async fn change_master_password(
     new_password: String,
     updated_stored_passwords: Vec<String>,
 ) -> Result<(), DbError> {
-    let en_user = user2oid(&creds.username);
-    let _guard = acquire_user_lock(en_user).await;
-
     let (db, user, en_user) = authenticate_user(creds).await?;
+    let _guard = acquire_user_lock(en_user).await;
 
     if user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
