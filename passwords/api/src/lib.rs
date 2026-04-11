@@ -319,16 +319,10 @@ fn app_routes() -> Router {
     app
 }
 
-/// Build the full application [`Router`] with all middleware layers.
+/// Build the application [`Router`] with middleware configured via [`RouterConfig`].
 ///
-/// Includes CORS, per-IP rate limiting, Prometheus metrics collection
-/// (exposed at `/metrics`), and HTTP tracing.  Safe to call multiple
-/// times in the same process — the Prometheus recorder is initialised
-/// at most once and reused on subsequent calls.
-///
-/// Use [`RouterConfig::default()`] for production settings.  Tests can
-/// override individual fields (e.g. a large `burst_size` to avoid
-/// accidental 429s, or a small one to exercise throttling).
+/// Safe to call multiple times — the Prometheus recorder is initialised once
+/// and reused.
 pub fn build_router(config: RouterConfig) -> Router {
     let burst_size = config.burst_size;
     let (prometheus_layer, metric_handle) = prometheus_pair();
@@ -344,11 +338,7 @@ pub fn build_router(config: RouterConfig) -> Router {
         .finish()
         .expect("invalid rate-limit configuration");
 
-    // Layers wrap routes that were registered *before* the .layer() call.
-    // Order (outermost → innermost): CORS → rate-limit → prometheus → tracing → handler.
-    // CORS must be outermost so preflight OPTIONS responses are never blocked
-    // by the rate limiter. The prometheus middleware is inside rate-limiting so
-    // that only non-throttled requests are measured.
+    // .layer() is last-added = outermost; read bottom-to-top for execution order.
     app.layer(prometheus_layer)
         .layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
