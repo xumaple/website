@@ -40,3 +40,6 @@ jobs:
 
       - name: Run integration tests
         run: cargo test --test integration_tests --features test-helpers
+
+      - name: Run backwards compatibility tests
+        run: cargo test --test backcompat_tests --features test-helpers

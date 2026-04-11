@@ -469,61 +469,89 @@ test.describe.serial("Full user journey", () => {
 // ── Backwards-compatibility tests ───────────────────────────────────────────
 //
 // These tests verify that the permanent backcompat test user (created by the
-// Rust `backcompat_setup` test) can still authenticate and retrieve its stored
-// passwords. Because the user was created via the API with raw header values
-// (not through the UI's SHA-3 hashing), we make direct API requests here
-// rather than driving the UI.
+// Rust `backcompat_setup` test) can still log in through the real UI and
+// retrieve its stored passwords. The user was created with client-side hashed
+// credentials (SHA-3 via encryptMaster), so logging in with the plaintext
+// credentials exercises the full frontend crypto pipeline.
 
-const BACKCOMPAT_USER = "__backcompat_test_user__";
-const BACKCOMPAT_PW = "backcompat_password_123";
+const BACKCOMPAT_PLAINTEXT_USER = "backcompat_test_user";
+const BACKCOMPAT_PLAINTEXT_PW = "backcompat_password_123";
 const BACKCOMPAT_EXPECTED_KEYS = ["email", "bank", "social"];
 
-test.describe("Backwards compatibility", () => {
-  test("backcompat user can authenticate and keys are present", async ({
-    request,
-  }) => {
-    // Verify the user can authenticate.
-    const verifyRes = await request.get(`${API}/api/v2/user/verify`, {
-      headers: {
-        "x-username": BACKCOMPAT_USER,
-        "x-password": BACKCOMPAT_PW,
-      },
-    });
-    expect(verifyRes.ok()).toBeTruthy();
+test.describe.serial("Backwards compatibility", () => {
+  /** @type {import('@playwright/test').Page} */
+  let page;
 
-    // Verify all expected keys are present.
-    const keysRes = await request.get(`${API}/api/v2/keys`, {
-      headers: {
-        "x-username": BACKCOMPAT_USER,
-        "x-password": BACKCOMPAT_PW,
-      },
-    });
-    expect(keysRes.ok()).toBeTruthy();
-
-    const keys = await keysRes.json();
-    for (const expectedKey of BACKCOMPAT_EXPECTED_KEYS) {
-      expect(keys).toContain(expectedKey);
-    }
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
   });
 
-  test("backcompat user passwords are retrievable", async ({ request }) => {
-    const expectedPasswords = [
-      { key: "email", value: "enc_email_value" },
-      { key: "bank", value: "enc_bank_value" },
-      { key: "social", value: "enc_social_value" },
-    ];
+  test.afterAll(async () => {
+    await page.close();
+  });
 
-    for (const { key, value } of expectedPasswords) {
-      const res = await request.get(`${API}/api/v2/passwords/${key}`, {
-        headers: {
-          "x-username": BACKCOMPAT_USER,
-          "x-password": BACKCOMPAT_PW,
-        },
+  test("backcompat user can log in through the UI", async () => {
+    await page.goto("/");
+    await expect(page.getByText("Welcome to MapoPass")).toBeVisible();
+
+    // Fill in the plaintext credentials — the frontend hashes them via
+    // encryptMaster() before sending to the API.
+    await page.getByLabel("username").fill(BACKCOMPAT_PLAINTEXT_USER);
+    await page.getByLabel("password").fill(BACKCOMPAT_PLAINTEXT_PW);
+
+    await page.getByRole("button", { name: "Log In" }).click();
+
+    // Wait for the account view to load.
+    await expect(
+      page.getByText("Select a password to retrieve:")
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("backcompat user keys are present in dropdown", async () => {
+    // Open the autocomplete dropdown to see all available keys.
+    const autocomplete = page.getByRole("combobox", {
+      name: "Select a password key",
+    });
+    await autocomplete.click();
+
+    // Verify each expected key appears as an option.
+    for (const expectedKey of BACKCOMPAT_EXPECTED_KEYS) {
+      await expect(
+        page.getByRole("option", { name: expectedKey })
+      ).toBeVisible({ timeout: 5_000 });
+    }
+
+    // Close the dropdown by pressing Escape.
+    await page.keyboard.press("Escape");
+  });
+
+  test("backcompat user passwords decrypt correctly through the UI", async () => {
+    // Grant clipboard permissions for reading the decrypted value.
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+
+    for (const key of BACKCOMPAT_EXPECTED_KEYS) {
+      const autocomplete = page.getByRole("combobox", {
+        name: "Select a password key",
       });
-      expect(res.ok()).toBeTruthy();
+      await autocomplete.click();
+      await autocomplete.fill("");
+      await autocomplete.fill(key);
+      await page.getByRole("option", { name: key }).click();
 
-      const body = await res.json();
-      expect(body).toBe(value);
+      // Wait for the "Retrieved password for <key>!" alert — this only
+      // appears when client-side AES decryption succeeds.
+      await expect(
+        page.getByText(`Retrieved password for ${key}!`)
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Click to copy the decrypted password to clipboard.
+      await page.getByText("Click here to copy.").click();
+
+      // Read the clipboard and verify it contains a non-empty decrypted value.
+      const clipboardText = await page.evaluate(() =>
+        navigator.clipboard.readText()
+      );
+      expect(clipboardText.length).toBeGreaterThan(0);
     }
   });
 });
