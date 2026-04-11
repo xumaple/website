@@ -17,7 +17,7 @@ use axum::body::Body;
 use axum::{middleware::from_fn, extract::ConnectInfo};
 use common::{app, body_string, parse_json, run, TestUser, WithAuth};
 use http::{Request, StatusCode};
-use passwords::build_router_with_burst_no_metrics;
+use passwords::build_router_with_burst;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tower::ServiceExt;
@@ -69,7 +69,7 @@ fn test_rate_limiting() {
         // observe throttling.  We still need the connect-info middleware that
         // `app()` adds, so copy that behaviour.
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-        let limited = build_router_with_burst_no_metrics(10)
+        let limited = build_router_with_burst(10)
             .layer(from_fn(move |mut req: Request<Body>, next: axum::middleware::Next| async move {
                 req.extensions_mut().insert(ConnectInfo(addr));
                 next.run(req).await

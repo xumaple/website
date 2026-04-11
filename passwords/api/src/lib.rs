@@ -9,11 +9,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use axum_prometheus::metrics_exporter_prometheus::PrometheusHandle;
 use axum_prometheus::PrometheusMetricLayer;
 use db::DbError;
 use encrypt::{generate_password, Credentials, CryptoError};
 use env::EnvVars;
 use serde::Deserialize;
+use std::sync::OnceLock;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::CorsLayer;
@@ -253,6 +255,24 @@ async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
 }
 
 // ---------------------------------------------------------------------------
+// Prometheus metrics (initialized at most once per process)
+// ---------------------------------------------------------------------------
+
+/// Stores the Prometheus metric layer and handle so that
+/// `PrometheusMetricLayer::pair()` (which installs a global recorder) is
+/// called at most once. Subsequent calls to `prometheus_pair()` clone the
+/// stored values.
+static PROMETHEUS: OnceLock<(PrometheusMetricLayer<'static>, PrometheusHandle)> = OnceLock::new();
+
+/// Return a `(layer, handle)` pair, creating it on the first call and
+/// cloning the cached values on every subsequent call.
+fn prometheus_pair() -> (PrometheusMetricLayer<'static>, PrometheusHandle) {
+    PROMETHEUS
+        .get_or_init(PrometheusMetricLayer::pair)
+        .clone()
+}
+
+// ---------------------------------------------------------------------------
 // Application builder
 // ---------------------------------------------------------------------------
 
@@ -281,17 +301,19 @@ fn app_routes() -> Router {
 /// Build the application router, using the supplied burst size for the
 /// rate limiter.
 ///
-/// The Prometheus metric layer and `/metrics` endpoint are created
-/// internally via [`PrometheusMetricLayer::pair()`]. Because the
-/// underlying `metrics` crate only allows a single global recorder,
-/// this function must be called **at most once per process**.
+/// The Prometheus metric layer and `/metrics` endpoint are initialised
+/// lazily via [`prometheus_pair()`], which calls
+/// [`PrometheusMetricLayer::pair()`] at most once per process (subsequent
+/// calls clone the cached layer and handle). This makes the function safe
+/// to call multiple times — important for tests that create separate
+/// routers with different burst sizes.
 ///
 /// The normal entry point `build_router()` calls this with
 /// [`RATE_LIMIT_BURST_SIZE`].
 /// Tests may pass a much larger burst value to avoid accidental 429s
 /// during their busy request sequences.
 pub fn build_router_with_burst(burst_size: u32) -> Router {
-    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+    let (prometheus_layer, metric_handle) = prometheus_pair();
 
     let app = app_routes()
         .route("/metrics", get(|| async move { metric_handle.render() }));
@@ -311,26 +333,6 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
     // that only non-throttled requests are measured.
     app.layer(prometheus_layer)
         .layer(TraceLayer::new_for_http())
-        .layer(GovernorLayer::new(rate_limit_config))
-        .layer(cors_layer())
-}
-
-/// Build a router with the given burst size but **without** installing
-/// a Prometheus recorder.  Useful in tests that need a separate router
-/// (e.g. to test rate-limiting with a small burst) when the global
-/// recorder has already been installed by another router in the same
-/// process.
-pub fn build_router_with_burst_no_metrics(burst_size: u32) -> Router {
-    let app = app_routes();
-
-    let mut rate_limit_builder = GovernorConfigBuilder::default()
-        .const_per_millisecond(RATE_LIMIT_REPLENISH_PERIOD_MS)
-        .const_burst_size(burst_size);
-    let rate_limit_config = rate_limit_builder
-        .finish()
-        .expect("invalid rate-limit configuration");
-
-    app.layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
 }
