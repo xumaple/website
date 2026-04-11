@@ -13,7 +13,7 @@
 mod common;
 
 use axum::body::Body;
-use common::backcompat::{BACKCOMPAT_PW, BACKCOMPAT_USER, OLD_RAW_USER, EXPECTED_PASSWORDS};
+use common::backcompat::{BACKCOMPAT_PW, BACKCOMPAT_USER, EXPECTED_PASSWORDS};
 use common::{app, body_string, run, WithAuth};
 use http::{Request, StatusCode};
 use tower::ServiceExt;
@@ -22,21 +22,6 @@ use tower::ServiceExt;
 #[ignore]
 fn setup_backcompat_user() {
     run(async {
-        // 0. Clean up the old broken user that was created with the raw
-        //    (unhashed) username. Ignore errors — the user may not exist.
-        let req = Request::builder()
-            .method("DELETE")
-            .uri("/api/v2/user")
-            .header("x-username", OLD_RAW_USER)
-            .header("x-password", "unused")
-            .body(Body::empty())
-            .unwrap();
-        let res = app().oneshot(req).await.unwrap();
-        eprintln!(
-            "Old user cleanup: status {}",
-            res.status()
-        );
-
         // 1. Create the user with hashed credentials (as the frontend would
         //    send after `encryptMaster()`). If it already exists the API
         //    returns 404 (uniform error responses), which we treat as success.

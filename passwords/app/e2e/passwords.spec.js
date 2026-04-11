@@ -476,7 +476,11 @@ test.describe.serial("Full user journey", () => {
 
 const BACKCOMPAT_PLAINTEXT_USER = "backcompat_test_user";
 const BACKCOMPAT_PLAINTEXT_PW = "backcompat_password_123";
-const BACKCOMPAT_EXPECTED_KEYS = ["email", "bank", "social"];
+const BACKCOMPAT_EXPECTED_PASSWORDS = {
+  email: "my_email_password",
+  bank: "my_bank_password",
+  social: "my_social_password",
+};
 
 test.describe.serial("Backwards compatibility", () => {
   /** @type {import('@playwright/test').Page} */
@@ -507,51 +511,11 @@ test.describe.serial("Backwards compatibility", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  test("backcompat user keys are present in dropdown", async () => {
-    // Open the autocomplete dropdown to see all available keys.
-    const autocomplete = page.getByRole("combobox", {
-      name: "Select a password key",
-    });
-    await autocomplete.click();
-
-    // Verify each expected key appears as an option.
-    for (const expectedKey of BACKCOMPAT_EXPECTED_KEYS) {
-      await expect(
-        page.getByRole("option", { name: expectedKey })
-      ).toBeVisible({ timeout: 5_000 });
-    }
-
-    // Close the dropdown by pressing Escape.
-    await page.keyboard.press("Escape");
-  });
-
-  test("backcompat user passwords decrypt correctly through the UI", async () => {
-    // Grant clipboard permissions for reading the decrypted value.
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-
-    for (const key of BACKCOMPAT_EXPECTED_KEYS) {
-      const autocomplete = page.getByRole("combobox", {
-        name: "Select a password key",
-      });
-      await autocomplete.click();
-      await autocomplete.fill("");
-      await autocomplete.fill(key);
-      await page.getByRole("option", { name: key }).click();
-
-      // Wait for the "Retrieved password for <key>!" alert — this only
-      // appears when client-side AES decryption succeeds.
-      await expect(
-        page.getByText(`Retrieved password for ${key}!`)
-      ).toBeVisible({ timeout: 10_000 });
-
-      // Click to copy the decrypted password to clipboard.
-      await page.getByText("Click here to copy.").click();
-
-      // Read the clipboard and verify it contains a non-empty decrypted value.
-      const clipboardText = await page.evaluate(() =>
-        navigator.clipboard.readText()
-      );
-      expect(clipboardText.length).toBeGreaterThan(0);
+  test("backcompat user passwords decrypt to expected plaintext values", async () => {
+    // Select each key from the dropdown, retrieve the password, and verify
+    // the decrypted value matches the expected plaintext.
+    for (const [key, expectedPlaintext] of Object.entries(BACKCOMPAT_EXPECTED_PASSWORDS)) {
+      await queryAndVerifyPassword(page, key, expectedPlaintext);
     }
   });
 });

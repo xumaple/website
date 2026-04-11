@@ -1,22 +1,4 @@
 //! Backwards-compatibility tests for the permanent backcompat test user.
-//!
-//! These tests verify that a user created by `backcompat_setup.rs` can still
-//! authenticate and retrieve their stored passwords. This guards against
-//! breaking changes to auth, encryption, or data format.
-//!
-//! ## Prerequisites
-//!
-//! Run the setup once before these tests:
-//!
-//! ```sh
-//! cargo test --test backcompat_setup -- --ignored --features test-helpers
-//! ```
-//!
-//! ## Running
-//!
-//! ```sh
-//! cargo test --test backcompat_tests --features test-helpers
-//! ```
 
 mod common;
 
