@@ -3,6 +3,10 @@
 //! Provides a shared tokio runtime, Axum router, RAII test user cleanup,
 //! and common helpers. Import via `mod common;` from any test file.
 
+// Each test binary compiles this module independently and may not use every
+// item. Suppress dead-code warnings that arise from partial usage.
+#![allow(dead_code)]
+
 use axum::body::Body;
 use axum::{Router, middleware::from_fn, extract::ConnectInfo};
 use http::Request;
@@ -71,6 +75,12 @@ impl WithAuth for http::request::Builder {
 pub struct TestUser {
     username: String,
     password: String,
+}
+
+impl Default for TestUser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestUser {

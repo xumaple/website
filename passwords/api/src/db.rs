@@ -535,7 +535,7 @@ mod tests {
     // Test the duplicate key detection logic used in add_stored_password
     #[test]
     fn test_duplicate_key_detection() {
-        let passwords = vec![
+        let passwords = [
             PasswordKV {
                 key: "gmail".to_string(),
                 en_password: "enc1".to_string(),
