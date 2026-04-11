@@ -23,6 +23,10 @@ primary_region = 'ord'
     method = 'GET'
     path = '/api/v2/generate'
 
+[metrics]
+  port = 8000
+  path = "/metrics"
+
 [[vm]]
   memory = '256mb'
   cpus = 1

@@ -9,10 +9,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use axum_prometheus::metrics_exporter_prometheus::PrometheusHandle;
+use axum_prometheus::PrometheusMetricLayer;
 use db::DbError;
 use encrypt::{generate_password, Credentials, CryptoError};
 use env::EnvVars;
 use serde::Deserialize;
+use std::sync::OnceLock;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::GovernorLayer;
 use tower_http::cors::CorsLayer;
@@ -30,7 +33,28 @@ const RATE_LIMIT_REPLENISH_PERIOD_MS: u64 = 100;
 
 /// Maximum burst size — the number of requests a client can make
 /// before being throttled.
-const RATE_LIMIT_BURST_SIZE: u32 = 10;
+pub const RATE_LIMIT_BURST_SIZE: u32 = 10;
+
+// ---------------------------------------------------------------------------
+// Router configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for building the application router.
+///
+/// Use [`RouterConfig::default()`] for production settings, or construct
+/// manually to override values (e.g. in tests).
+pub struct RouterConfig {
+    /// Maximum number of requests a client can make before being throttled.
+    pub burst_size: u32,
+}
+
+impl Default for RouterConfig {
+    fn default() -> Self {
+        Self {
+            burst_size: RATE_LIMIT_BURST_SIZE,
+        }
+    }
+}
 
 fn is_valid_key_length(key: &str) -> bool {
     key.len() <= MAX_KEY_LENGTH
@@ -252,14 +276,29 @@ async fn delete_user(creds: Credentials) -> Result<StatusCode, Error> {
 }
 
 // ---------------------------------------------------------------------------
+// Prometheus metrics (initialized at most once per process)
+// ---------------------------------------------------------------------------
+
+/// Stores the Prometheus metric layer and handle so that
+/// `PrometheusMetricLayer::pair()` (which installs a global recorder) is
+/// called at most once. Subsequent calls to `prometheus_pair()` clone the
+/// stored values.
+static PROMETHEUS: OnceLock<(PrometheusMetricLayer<'static>, PrometheusHandle)> = OnceLock::new();
+
+/// Return a `(layer, handle)` pair, creating it on the first call and
+/// cloning the cached values on every subsequent call.
+fn prometheus_pair() -> (PrometheusMetricLayer<'static>, PrometheusHandle) {
+    PROMETHEUS
+        .get_or_init(PrometheusMetricLayer::pair)
+        .clone()
+}
+
+// ---------------------------------------------------------------------------
 // Application builder
 // ---------------------------------------------------------------------------
 
-/// Build the application router, using the supplied burst size for the
-/// rate limiter.  The normal entry point `build_router()` calls this with
-/// [`RATE_LIMIT_BURST_SIZE`]. Tests may pass a much larger value to avoid
-/// accidental 429s during their busy request sequences.
-pub fn build_router_with_burst(burst_size: u32) -> Router {
+/// Register all application routes (including conditional test-only routes).
+fn app_routes() -> Router {
     let app = Router::new()
         .route("/api/v2/generate", get(generate))
         .route("/api/v2/user", post(create_user).put(update_user))
@@ -277,6 +316,20 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
     #[cfg(any(test, debug_assertions, feature = "test-helpers"))]
     let app = app.route("/api/v2/user", axum::routing::delete(delete_user));
 
+    app
+}
+
+/// Build the application [`Router`] with middleware configured via [`RouterConfig`].
+///
+/// Safe to call multiple times — the Prometheus recorder is initialised once
+/// and reused.
+pub fn build_router(config: RouterConfig) -> Router {
+    let burst_size = config.burst_size;
+    let (prometheus_layer, metric_handle) = prometheus_pair();
+
+    let app = app_routes()
+        .route("/metrics", get(|| async move { metric_handle.render() }));
+
     // Build the rate limiter configuration.
     let mut rate_limit_builder = GovernorConfigBuilder::default()
         .const_per_millisecond(RATE_LIMIT_REPLENISH_PERIOD_MS)
@@ -285,18 +338,11 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
         .finish()
         .expect("invalid rate-limit configuration");
 
-    // Layers wrap routes that were registered *before* the .layer() call.
-    // Order (outermost → innermost): CORS → rate-limit → tracing → handler.
-    // CORS must be outermost so preflight OPTIONS responses are never blocked
-    // by the rate limiter.
-    app.layer(TraceLayer::new_for_http())
+    // .layer() is last-added = outermost; read bottom-to-top for execution order.
+    app.layer(prometheus_layer)
+        .layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
-}
-
-/// Convenience wrapper used throughout the production binary.
-pub fn build_router() -> Router {
-    build_router_with_burst(RATE_LIMIT_BURST_SIZE)
 }
 
 #[cfg(test)]
