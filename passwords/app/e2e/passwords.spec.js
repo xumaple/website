@@ -466,6 +466,60 @@ test.describe.serial("Full user journey", () => {
   });
 });
 
+// ── Backwards-compatibility tests ───────────────────────────────────────────
+//
+// These tests verify that the permanent backcompat test user (created by the
+// Rust `backcompat_setup` test) can still log in through the real UI and
+// retrieve its stored passwords. The user was created with client-side hashed
+// credentials (SHA-3 via encryptMaster), so logging in with the plaintext
+// credentials exercises the full frontend crypto pipeline.
+
+const BACKCOMPAT_PLAINTEXT_USER = "backcompat_test_user";
+const BACKCOMPAT_PLAINTEXT_PW = "backcompat_password_123";
+const BACKCOMPAT_EXPECTED_PASSWORDS = {
+  email: "my_email_password",
+  bank: "my_bank_password",
+  social: "my_social_password",
+};
+
+test.describe.serial("Backwards compatibility", () => {
+  /** @type {import('@playwright/test').Page} */
+  let page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test("backcompat user can log in through the UI", async () => {
+    await page.goto("/");
+    await expect(page.getByText("Welcome to MapoPass")).toBeVisible();
+
+    // Fill in the plaintext credentials — the frontend hashes them via
+    // encryptMaster() before sending to the API.
+    await page.getByLabel("username").fill(BACKCOMPAT_PLAINTEXT_USER);
+    await page.getByLabel("password").fill(BACKCOMPAT_PLAINTEXT_PW);
+
+    await page.getByRole("button", { name: "Log In" }).click();
+
+    // Wait for the account view to load.
+    await expect(
+      page.getByText("Select a password to retrieve:")
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("backcompat user passwords decrypt to expected plaintext values", async () => {
+    // Select each key from the dropdown, retrieve the password, and verify
+    // the decrypted value matches the expected plaintext.
+    for (const [key, expectedPlaintext] of Object.entries(BACKCOMPAT_EXPECTED_PASSWORDS)) {
+      await queryAndVerifyPassword(page, key, expectedPlaintext);
+    }
+  });
+});
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**

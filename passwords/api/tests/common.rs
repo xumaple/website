@@ -14,6 +14,26 @@ use std::sync::LazyLock;
 
 pub const TEST_PW: &str = "test_password_abc123";
 
+// ── Backcompat test constants ──────────────────────────────────────────────
+// Shared between backcompat_setup.rs and backcompat_tests.rs.
+
+#[allow(dead_code)]
+pub mod backcompat {
+    /// Client-side SHA-3 hashed credentials (output of `encryptMaster()`).
+    /// These are what the frontend sends as `x-username` / `x-password` headers.
+    pub const BACKCOMPAT_USER: &str = "93aba7f07aa6cd38";
+    pub const BACKCOMPAT_PW: &str = "e6c146a2e22f5e2e";
+
+    pub const EXPECTED_KEYS: &[&str] = &["email", "bank", "social"];
+
+    /// Encrypted password values (AES with SHA-256 of the plaintext password as key).
+    pub const EXPECTED_PASSWORDS: &[(&str, &str)] = &[
+        ("email", "U2FsdGVkX184eJIaOi3wqeiw22+VTItwS6ujyQjQl6yr6kSW9UKrtq5sFLoCe7aD"),
+        ("bank", "U2FsdGVkX19Szi+RIYAHWUjHPgLM3EKL43CrEJB8zyfb2GY6u+Pn4dw/3uSMeZQk"),
+        ("social", "U2FsdGVkX1/0UvpMeilf4CXaAppupUSgA6di9fjBv26F1pdUyPLJiJmQTMdx6n4K"),
+    ];
+}
+
 // ---------------------------------------------------------------------------
 // Single shared runtime – keeps the MongoDB connection pool alive across tests.
 // Shared Axum router + DB connection (initialized once on the shared runtime).
@@ -71,6 +91,12 @@ impl WithAuth for http::request::Builder {
 pub struct TestUser {
     username: String,
     password: String,
+}
+
+impl Default for TestUser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestUser {
