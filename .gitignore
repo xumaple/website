@@ -11,6 +11,8 @@ build
 # Claude Code
 .claude/
 worktree-*/
+CLAUDE.md
+copilot-instructions.md
 
 # Playwright
 test-results/
