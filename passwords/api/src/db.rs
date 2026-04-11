@@ -1,5 +1,6 @@
 use crate::encrypt::{user2oid, Credentials, CryptoError, MasterKey};
 use crate::env::EnvVars;
+use dashmap::DashMap;
 use mongodb::{
     bson::{doc, oid::ObjectId, to_bson, Bson},
     error::Error as MongoError,
@@ -7,8 +8,29 @@ use mongodb::{
     Client, Collection,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 static DB: tokio::sync::OnceCell<Collection<User>> = tokio::sync::OnceCell::const_new();
+
+// ---------------------------------------------------------------------------
+// Per-user lock map for serializing mutating requests
+// ---------------------------------------------------------------------------
+
+/// A shared map from user ObjectId to a per-user async mutex.
+/// All mutating (write) db functions acquire the lock for the target user
+/// before proceeding, preventing race conditions on concurrent writes.
+static USER_LOCKS: std::sync::LazyLock<DashMap<ObjectId, Arc<tokio::sync::Mutex<()>>>> =
+    std::sync::LazyLock::new(DashMap::new);
+
+/// Acquire the per-user async mutex for the given OID, returning the guard.
+/// The guard must be held for the duration of the mutating operation.
+async fn acquire_user_lock(oid: ObjectId) -> tokio::sync::OwnedMutexGuard<()> {
+    let mutex = USER_LOCKS
+        .entry(oid)
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+    mutex.lock_owned().await
+}
 
 pub static OID_LEN: usize = 12;
 pub type OID = ObjectId;
@@ -82,6 +104,8 @@ pub async fn add_user(creds: Credentials) -> Result<(), DbError> {
     let db = DB.get().unwrap();
 
     let en_user = user2oid(&creds.username);
+    let _guard = acquire_user_lock(en_user).await;
+
     if find_user(&creds.username, en_user).await.is_ok() {
         return Err(DbError::GenericError {
             error_msg: "Cannot add user because username already exists".to_owned(),
@@ -161,6 +185,17 @@ pub async fn add_stored_password(
     encrypted_password: String,
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
+    let _guard = acquire_user_lock(en_user).await;
+
+    // Re-read the user after acquiring the lock to detect TOCTOU: if another
+    // request changed the master password between our authenticate_user call
+    // and the lock acquisition, the stored master_pw will have changed.
+    let current_user = find_user("", en_user).await?;
+    if current_user.master_key.master_pw != user.master_key.master_pw {
+        return Err(DbError::GenericError {
+            error_msg: "Master password was changed by a concurrent request".to_owned(),
+        });
+    }
 
     if user
         .stored_passwords
@@ -195,6 +230,7 @@ pub async fn change_stored_password(
     encrypted_password: String,
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
+    let _guard = acquire_user_lock(en_user).await;
 
     user.stored_passwords
         .into_iter()
@@ -224,6 +260,17 @@ pub async fn change_master_password(
     updated_stored_passwords: Vec<String>,
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
+    let _guard = acquire_user_lock(en_user).await;
+
+    // Re-read the user after acquiring the lock to detect TOCTOU: if another
+    // request changed the master password between our authenticate_user call
+    // and the lock acquisition, the stored master_pw will have changed.
+    let current_user = find_user("", en_user).await?;
+    if current_user.master_key.master_pw != user.master_key.master_pw {
+        return Err(DbError::GenericError {
+            error_msg: "Master password was changed by a concurrent request".to_owned(),
+        });
+    }
 
     if user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
@@ -262,6 +309,7 @@ pub async fn change_master_password(
 pub async fn delete_user(username: String) -> Result<(), DbError> {
     let db = DB.get().unwrap();
     let en_user = user2oid(&username);
+    let _guard = acquire_user_lock(en_user).await;
     db.delete_one(doc! { "_id": en_user }).await?;
     Ok(())
 }
