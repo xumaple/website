@@ -187,6 +187,16 @@ pub async fn add_stored_password(
     let (db, user, en_user) = authenticate_user(creds).await?;
     let _guard = acquire_user_lock(en_user).await;
 
+    // Re-read the user after acquiring the lock to detect TOCTOU: if another
+    // request changed the master password between our authenticate_user call
+    // and the lock acquisition, the stored master_pw will have changed.
+    let current_user = find_user("", en_user).await?;
+    if current_user.master_key.master_pw != user.master_key.master_pw {
+        return Err(DbError::GenericError {
+            error_msg: "Master password was changed by a concurrent request".to_owned(),
+        });
+    }
+
     if user
         .stored_passwords
         .iter()
@@ -251,6 +261,16 @@ pub async fn change_master_password(
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
     let _guard = acquire_user_lock(en_user).await;
+
+    // Re-read the user after acquiring the lock to detect TOCTOU: if another
+    // request changed the master password between our authenticate_user call
+    // and the lock acquisition, the stored master_pw will have changed.
+    let current_user = find_user("", en_user).await?;
+    if current_user.master_key.master_pw != user.master_key.master_pw {
+        return Err(DbError::GenericError {
+            error_msg: "Master password was changed by a concurrent request".to_owned(),
+        });
+    }
 
     if user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
