@@ -13,20 +13,10 @@
 mod common;
 
 use axum::body::Body;
+use common::backcompat::{BACKCOMPAT_PW, BACKCOMPAT_USER, EXPECTED_PASSWORDS};
 use common::{app, body_string, run, WithAuth};
 use http::{Request, StatusCode};
 use tower::ServiceExt;
-
-// Hardcoded credentials for the backcompat user.
-const BACKCOMPAT_USER: &str = "__backcompat_test_user__";
-const BACKCOMPAT_PW: &str = "backcompat_password_123";
-
-// Stored passwords to seed.
-const STORED_PASSWORDS: &[(&str, &str)] = &[
-    ("email", "enc_email_value"),
-    ("bank", "enc_bank_value"),
-    ("social", "enc_social_value"),
-];
 
 #[test]
 #[ignore]
@@ -67,7 +57,7 @@ fn setup_backcompat_user() {
 
         // 3. Add stored passwords. If a key already exists the API returns
         //    404 (duplicate key → uniform error), which we skip gracefully.
-        for (key, enc_pw) in STORED_PASSWORDS {
+        for (key, enc_pw) in EXPECTED_PASSWORDS {
             let req = Request::builder()
                 .method("POST")
                 .uri(format!("/api/v2/passwords/{key}"))

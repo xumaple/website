@@ -18,6 +18,22 @@ use std::sync::LazyLock;
 
 pub const TEST_PW: &str = "test_password_abc123";
 
+// ── Backcompat test constants ──────────────────────────────────────────────
+// Shared between backcompat_setup.rs and backcompat_tests.rs.
+
+pub mod backcompat {
+    pub const BACKCOMPAT_USER: &str = "__backcompat_test_user__";
+    pub const BACKCOMPAT_PW: &str = "backcompat_password_123";
+
+    pub const EXPECTED_KEYS: &[&str] = &["email", "bank", "social"];
+
+    pub const EXPECTED_PASSWORDS: &[(&str, &str)] = &[
+        ("email", "enc_email_value"),
+        ("bank", "enc_bank_value"),
+        ("social", "enc_social_value"),
+    ];
+}
+
 // ---------------------------------------------------------------------------
 // Single shared runtime – keeps the MongoDB connection pool alive across tests.
 // Shared Axum router + DB connection (initialized once on the shared runtime).

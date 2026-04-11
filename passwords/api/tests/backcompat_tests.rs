@@ -21,22 +21,10 @@
 mod common;
 
 use axum::body::Body;
+use common::backcompat::{BACKCOMPAT_PW, BACKCOMPAT_USER, EXPECTED_KEYS, EXPECTED_PASSWORDS};
 use common::{app, body_string, parse_json, run, WithAuth};
 use http::{Request, StatusCode};
 use tower::ServiceExt;
-
-// ── Expected values (must match backcompat_setup.rs) ────────────────────────
-
-const BACKCOMPAT_USER: &str = "__backcompat_test_user__";
-const BACKCOMPAT_PW: &str = "backcompat_password_123";
-
-const EXPECTED_KEYS: &[&str] = &["email", "bank", "social"];
-
-const EXPECTED_PASSWORDS: &[(&str, &str)] = &[
-    ("email", "enc_email_value"),
-    ("bank", "enc_bank_value"),
-    ("social", "enc_social_value"),
-];
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
