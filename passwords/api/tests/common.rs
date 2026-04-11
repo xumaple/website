@@ -7,7 +7,7 @@ use axum::body::Body;
 use axum::{Router, middleware::from_fn, extract::ConnectInfo};
 use http::Request;
 use mongodb::bson::oid::ObjectId;
-use passwords::build_router_with_burst;
+use passwords::{build_router, RouterConfig};
 use passwords::db;
 use std::net::SocketAddr;
 use std::sync::LazyLock;
@@ -32,7 +32,7 @@ static APP: LazyLock<Router> = LazyLock::new(|| {
         db::connect().await.expect("Failed to connect to test DB");
         // use a very large burst so ordinary tests aren't disrupted by our
         // rate limiter; stress test will create its own router below.
-        build_router_with_burst(1_000_000)
+        build_router(RouterConfig { burst_size: 1_000_000 })
     })
 });
 

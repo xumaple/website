@@ -33,7 +33,28 @@ const RATE_LIMIT_REPLENISH_PERIOD_MS: u64 = 100;
 
 /// Maximum burst size — the number of requests a client can make
 /// before being throttled.
-const RATE_LIMIT_BURST_SIZE: u32 = 10;
+pub const RATE_LIMIT_BURST_SIZE: u32 = 10;
+
+// ---------------------------------------------------------------------------
+// Router configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for building the application router.
+///
+/// Use [`RouterConfig::default()`] for production settings, or construct
+/// manually to override values (e.g. in tests).
+pub struct RouterConfig {
+    /// Maximum number of requests a client can make before being throttled.
+    pub burst_size: u32,
+}
+
+impl Default for RouterConfig {
+    fn default() -> Self {
+        Self {
+            burst_size: RATE_LIMIT_BURST_SIZE,
+        }
+    }
+}
 
 fn is_valid_key_length(key: &str) -> bool {
     key.len() <= MAX_KEY_LENGTH
@@ -298,21 +319,18 @@ fn app_routes() -> Router {
     app
 }
 
-/// Build the application router, using the supplied burst size for the
-/// rate limiter.
+/// Build the full application [`Router`] with all middleware layers.
 ///
-/// The Prometheus metric layer and `/metrics` endpoint are initialised
-/// lazily via [`prometheus_pair()`], which calls
-/// [`PrometheusMetricLayer::pair()`] at most once per process (subsequent
-/// calls clone the cached layer and handle). This makes the function safe
-/// to call multiple times — important for tests that create separate
-/// routers with different burst sizes.
+/// Includes CORS, per-IP rate limiting, Prometheus metrics collection
+/// (exposed at `/metrics`), and HTTP tracing.  Safe to call multiple
+/// times in the same process — the Prometheus recorder is initialised
+/// at most once and reused on subsequent calls.
 ///
-/// The normal entry point `build_router()` calls this with
-/// [`RATE_LIMIT_BURST_SIZE`].
-/// Tests may pass a much larger burst value to avoid accidental 429s
-/// during their busy request sequences.
-pub fn build_router_with_burst(burst_size: u32) -> Router {
+/// Use [`RouterConfig::default()`] for production settings.  Tests can
+/// override individual fields (e.g. a large `burst_size` to avoid
+/// accidental 429s, or a small one to exercise throttling).
+pub fn build_router(config: RouterConfig) -> Router {
+    let burst_size = config.burst_size;
     let (prometheus_layer, metric_handle) = prometheus_pair();
 
     let app = app_routes()
@@ -335,11 +353,6 @@ pub fn build_router_with_burst(burst_size: u32) -> Router {
         .layer(TraceLayer::new_for_http())
         .layer(GovernorLayer::new(rate_limit_config))
         .layer(cors_layer())
-}
-
-/// Convenience wrapper used by the production binary.
-pub fn build_router() -> Router {
-    build_router_with_burst(RATE_LIMIT_BURST_SIZE)
 }
 
 #[cfg(test)]
