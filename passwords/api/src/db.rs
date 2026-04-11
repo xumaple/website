@@ -272,11 +272,11 @@ pub async fn change_master_password(
         });
     }
 
-    if user.stored_passwords.len() != updated_stored_passwords.len() {
+    if current_user.stored_passwords.len() != updated_stored_passwords.len() {
         return Err(DbError::GenericError {
             error_msg: format!(
                 "Expected {} updated passwords, found {}",
-                user.stored_passwords.len(),
+                current_user.stored_passwords.len(),
                 updated_stored_passwords.len()
             ),
         });
@@ -291,7 +291,7 @@ pub async fn change_master_password(
         doc! {
             "$set": {
                 "master_key": Bson::from(new_mk),
-                "stored_passwords": user.stored_passwords
+                "stored_passwords": current_user.stored_passwords
                     .into_iter()
                     .zip(updated_stored_passwords.into_iter())
                     .map(|(kv, en_password)| PasswordKV { key: kv.key, en_password })

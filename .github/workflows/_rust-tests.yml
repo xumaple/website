@@ -39,7 +39,11 @@ jobs:
         run: cargo test --lib
 
       - name: Run integration tests
-        run: cargo test --tests --features test-helpers -- --skip backcompat
+        run: cargo test --tests --features test-helpers -- --skip backcompat --skip concurrency
+
+      - name: Run concurrency tests (10x for flake detection)
+        shell: bash
+        run: for i in $(seq 1 10); do cargo test --test concurrency_tests --features test-helpers; done
 
       - name: Run backwards compatibility tests
         run: cargo test --test backcompat_tests --features test-helpers
