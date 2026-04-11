@@ -466,6 +466,68 @@ test.describe.serial("Full user journey", () => {
   });
 });
 
+// ── Backwards-compatibility tests ───────────────────────────────────────────
+//
+// These tests verify that the permanent backcompat test user (created by the
+// Rust `backcompat_setup` test) can still authenticate and retrieve its stored
+// passwords. Because the user was created via the API with raw header values
+// (not through the UI's SHA-3 hashing), we make direct API requests here
+// rather than driving the UI.
+
+const BACKCOMPAT_USER = "__backcompat_test_user__";
+const BACKCOMPAT_PW = "backcompat_password_123";
+const BACKCOMPAT_EXPECTED_KEYS = ["email", "bank", "social"];
+
+test.describe("Backwards compatibility", () => {
+  test("backcompat user can authenticate and keys are present", async ({
+    request,
+  }) => {
+    // Verify the user can authenticate.
+    const verifyRes = await request.get(`${API}/api/v2/user/verify`, {
+      headers: {
+        "x-username": BACKCOMPAT_USER,
+        "x-password": BACKCOMPAT_PW,
+      },
+    });
+    expect(verifyRes.ok()).toBeTruthy();
+
+    // Verify all expected keys are present.
+    const keysRes = await request.get(`${API}/api/v2/keys`, {
+      headers: {
+        "x-username": BACKCOMPAT_USER,
+        "x-password": BACKCOMPAT_PW,
+      },
+    });
+    expect(keysRes.ok()).toBeTruthy();
+
+    const keys = await keysRes.json();
+    for (const expectedKey of BACKCOMPAT_EXPECTED_KEYS) {
+      expect(keys).toContain(expectedKey);
+    }
+  });
+
+  test("backcompat user passwords are retrievable", async ({ request }) => {
+    const expectedPasswords = [
+      { key: "email", value: "enc_email_value" },
+      { key: "bank", value: "enc_bank_value" },
+      { key: "social", value: "enc_social_value" },
+    ];
+
+    for (const { key, value } of expectedPasswords) {
+      const res = await request.get(`${API}/api/v2/passwords/${key}`, {
+        headers: {
+          "x-username": BACKCOMPAT_USER,
+          "x-password": BACKCOMPAT_PW,
+        },
+      });
+      expect(res.ok()).toBeTruthy();
+
+      const body = await res.json();
+      expect(body).toBe(value);
+    }
+  });
+});
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
