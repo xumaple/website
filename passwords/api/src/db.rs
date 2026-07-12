@@ -35,15 +35,41 @@ async fn acquire_user_lock(oid: ObjectId) -> tokio::sync::OwnedMutexGuard<()> {
 pub static OID_LEN: usize = 12;
 pub type OID = ObjectId;
 
+// ---------------------------------------------------------------------------
+// Document model: buckets of labeled, client-side-encrypted fields
+// ---------------------------------------------------------------------------
+
+/// Current document shape. Documents at older versions must be migrated
+/// (see `bin/migrate_v2`) before the API will serve them.
+pub const SCHEMA_VERSION: u32 = 2;
+
+/// A single labeled value inside a bucket. `en_value` is AES-encrypted
+/// client-side; the server never sees plaintext. `sensitive` is a UI hint:
+/// mask + click-to-copy vs. shown inline.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct PasswordKV {
-    key: String,
-    en_password: String,
+pub struct Field {
+    pub label: String,
+    pub en_value: String,
+    pub sensitive: bool,
 }
 
-impl From<PasswordKV> for Bson {
-    fn from(kv: PasswordKV) -> Bson {
-        to_bson(&kv).unwrap()
+/// A named collection of fields, e.g. everything belonging to "github".
+/// Bucket keys are unique per user; field labels are unique per bucket.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Bucket {
+    pub key: String,
+    pub fields: Vec<Field>,
+}
+
+impl From<Field> for Bson {
+    fn from(field: Field) -> Bson {
+        to_bson(&field).unwrap()
+    }
+}
+
+impl From<Bucket> for Bson {
+    fn from(bucket: Bucket) -> Bson {
+        to_bson(&bucket).unwrap()
     }
 }
 
@@ -58,7 +84,59 @@ pub struct User {
     #[serde(rename = "_id")]
     en_user: OID,
     master_key: MasterKey,
-    stored_passwords: Vec<PasswordKV>,
+    #[serde(default)]
+    schema_version: u32,
+    #[serde(default)]
+    buckets: Vec<Bucket>,
+}
+
+impl User {
+    /// Find the bucket with the given key, or error if it doesn't exist.
+    fn bucket(&self, key: &str) -> Result<&Bucket, DbError> {
+        self.buckets
+            .iter()
+            .find(|b| b.key == key)
+            .ok_or_else(|| DbError::GenericError {
+                error_msg: format!("Bucket {} doesn't exist", key),
+            })
+    }
+
+    /// Error if a bucket with the given key already exists.
+    fn assert_no_bucket(&self, key: &str) -> Result<(), DbError> {
+        if self.buckets.iter().any(|b| b.key == key) {
+            return Err(DbError::GenericError {
+                error_msg: format!("Bucket {} already exists", key),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Error if any two fields share a label.
+fn assert_unique_labels(fields: &[Field]) -> Result<(), DbError> {
+    for (i, f) in fields.iter().enumerate() {
+        if fields[..i].iter().any(|other| other.label == f.label) {
+            return Err(DbError::GenericError {
+                error_msg: format!("Duplicate field label {}", f.label),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The structural shape of a bucket list: bucket keys with their field
+/// labels, in order. Two vaults match structurally iff their shapes are
+/// equal — i.e. only the encrypted values differ.
+fn buckets_shape(buckets: &[Bucket]) -> Vec<(&str, Vec<&str>)> {
+    buckets
+        .iter()
+        .map(|b| {
+            (
+                b.key.as_str(),
+                b.fields.iter().map(|f| f.label.as_str()).collect(),
+            )
+        })
+        .collect()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -95,9 +173,90 @@ async fn authenticate_user(
 ) -> Result<(&'static Collection<User>, User, OID), DbError> {
     let db = DB.get().unwrap();
     let en_user = user2oid(&creds.username);
-    let user = find_user(&creds.username, en_user).await?;
+    let mut user = find_user(&creds.username, en_user).await?;
+    if user.schema_version != SCHEMA_VERSION {
+        return Err(DbError::GenericError {
+            error_msg: format!(
+                "User document is at schema version {} (expected {SCHEMA_VERSION}); run the migration",
+                user.schema_version
+            ),
+        });
+    }
     user.master_key.verify(&creds.password)?;
+
+    // Lazy re-hash: this is the only moment the plaintext password is in
+    // hand, so upgrade hashes derived under an older iteration target now.
+    // A rehash failure must not fail authentication.
+    if user.master_key.needs_rehash() {
+        match rehash_master_key(db, en_user, &creds.password).await {
+            Ok(Some(new_mk)) => user.master_key = new_mk,
+            Ok(None) => {}
+            Err(e) => tracing::warn!(error = %e, "failed to re-hash master key"),
+        }
+    }
+
     Ok((db, user, en_user))
+}
+
+/// Re-derive the master key hash at the current iteration target and store it.
+/// Acquires the per-user lock and re-reads the user (TOCTOU): only writes if
+/// the password still verifies against the re-read key and it still needs a
+/// rehash. Returns the new key so the caller can keep its snapshot in sync,
+/// or `None` if a concurrent request made the rehash unnecessary or invalid.
+async fn rehash_master_key(
+    db: &Collection<User>,
+    en_user: OID,
+    password: &str,
+) -> Result<Option<MasterKey>, DbError> {
+    let _guard = acquire_user_lock(en_user).await;
+
+    let current_user = find_user("", en_user).await?;
+    if current_user.master_key.verify(password).is_err()
+        || !current_user.master_key.needs_rehash()
+    {
+        return Ok(None);
+    }
+
+    let new_mk = MasterKey::new(password)?;
+    let new_iterations = new_mk.iterations;
+    db.update_one(
+        doc! {
+            "_id": en_user
+        },
+        doc! {
+            "$set": {
+                "master_key": to_bson(&new_mk).unwrap()
+            }
+        },
+    )
+    .await?;
+    tracing::info!(
+        old_iterations = current_user.master_key.iterations,
+        new_iterations,
+        "re-hashed master key"
+    );
+
+    Ok(Some(new_mk))
+}
+
+/// Acquire the per-user lock, then re-read the user to detect TOCTOU: if
+/// another request changed the master password between the caller's
+/// authenticate_user call and the lock acquisition, the stored master_pw
+/// will have changed. Returns the guard (which must be held for the duration
+/// of the mutating operation) together with the freshly-read user, whose
+/// state callers must use for existence/duplicate checks.
+async fn lock_and_reread(
+    user: &User,
+    en_user: OID,
+) -> Result<(tokio::sync::OwnedMutexGuard<()>, User), DbError> {
+    let guard = acquire_user_lock(en_user).await;
+    let current_user = find_user("", en_user).await?;
+    if current_user.master_key.master_pw != user.master_key.master_pw {
+        return Err(DbError::GenericError {
+            error_msg: "Master password was changed by a concurrent request".to_owned(),
+        });
+    }
+    Ok((guard, current_user))
 }
 
 pub async fn add_user(creds: Credentials) -> Result<(), DbError> {
@@ -118,7 +277,8 @@ pub async fn add_user(creds: Credentials) -> Result<(), DbError> {
         &User {
             en_user,
             master_key,
-            stored_passwords: vec![],
+            schema_version: SCHEMA_VERSION,
+            buckets: vec![],
         },
     )
     .await?;
@@ -149,63 +309,33 @@ pub async fn find_user(username: &str, en_user: OID) -> Result<User, DbError> {
     }
 }
 
-pub async fn get_stored_keys(creds: Credentials) -> Result<Vec<String>, DbError> {
+pub async fn get_bucket_keys(creds: Credentials) -> Result<Vec<String>, DbError> {
     let (_, user, _) = authenticate_user(creds).await?;
-    Ok(user.stored_passwords.into_iter().map(|kv| kv.key).collect())
+    Ok(user.buckets.into_iter().map(|b| b.key).collect())
 }
 
-pub async fn get_stored_password(
+/// Full buckets with encrypted values — used by the client to re-encrypt
+/// everything when changing the master password.
+pub async fn get_all_buckets(creds: Credentials) -> Result<Vec<Bucket>, DbError> {
+    let (_, user, _) = authenticate_user(creds).await?;
+    Ok(user.buckets)
+}
+
+pub async fn get_bucket(creds: Credentials, key: String) -> Result<Bucket, DbError> {
+    let (_, user, _) = authenticate_user(creds).await?;
+    Ok(user.bucket(&key)?.clone())
+}
+
+pub async fn create_bucket(
     creds: Credentials,
     key: String,
-) -> Result<String, DbError> {
-    let (_, user, _) = authenticate_user(creds).await?;
-    user.stored_passwords
-        .into_iter()
-        .find(|kv| key == kv.key)
-        .map(|kv| kv.en_password)
-        .ok_or_else(|| DbError::GenericError {
-            error_msg: format!("Unable to find key {}", key),
-        })
-}
-
-pub async fn get_stored_passwords(
-    creds: Credentials,
-) -> Result<Vec<String>, DbError> {
-    let (_, user, _) = authenticate_user(creds).await?;
-    Ok(user
-        .stored_passwords
-        .into_iter()
-        .map(|kv| kv.en_password)
-        .collect())
-}
-
-pub async fn add_stored_password(
-    creds: Credentials,
-    key: String,
-    encrypted_password: String,
+    fields: Vec<Field>,
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
-    let _guard = acquire_user_lock(en_user).await;
+    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
 
-    // Re-read the user after acquiring the lock to detect TOCTOU: if another
-    // request changed the master password between our authenticate_user call
-    // and the lock acquisition, the stored master_pw will have changed.
-    let current_user = find_user("", en_user).await?;
-    if current_user.master_key.master_pw != user.master_key.master_pw {
-        return Err(DbError::GenericError {
-            error_msg: "Master password was changed by a concurrent request".to_owned(),
-        });
-    }
-
-    if user
-        .stored_passwords
-        .iter()
-        .any(|u| u.key == key)
-    {
-        return Err(DbError::GenericError {
-            error_msg: format!("Key {} already exists", key),
-        });
-    }
+    current_user.assert_no_bucket(&key)?;
+    assert_unique_labels(&fields)?;
 
     db.update_one(
         doc! {
@@ -213,9 +343,7 @@ pub async fn add_stored_password(
         },
         doc! {
             "$push": {
-                "stored_passwords": Bson::from(PasswordKV {
-                    key, en_password: encrypted_password
-                })
+                "buckets": Bson::from(Bucket { key, fields })
             }
         },
     )
@@ -224,28 +352,24 @@ pub async fn add_stored_password(
     Ok(())
 }
 
-pub async fn change_stored_password(
+pub async fn rename_bucket(
     creds: Credentials,
     key: String,
-    encrypted_password: String,
+    new_key: String,
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
-    let _guard = acquire_user_lock(en_user).await;
+    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
 
-    user.stored_passwords
-        .into_iter()
-        .find(|u| u.key == key)
-        .ok_or_else(|| DbError::GenericError {
-            error_msg: format!("Key {} doesn't exist", key),
-        })?;
+    current_user.bucket(&key)?;
+    current_user.assert_no_bucket(&new_key)?;
 
     db.update_one(
         doc! {
-            "_id": en_user, "stored_passwords.key": key
+            "_id": en_user, "buckets.key": key
         },
         doc! {
             "$set": {
-                "stored_passwords.$.en_password": encrypted_password
+                "buckets.$.key": new_key
             }
         },
     )
@@ -254,31 +378,114 @@ pub async fn change_stored_password(
     Ok(())
 }
 
-pub async fn change_master_password(
+pub async fn delete_bucket(creds: Credentials, key: String) -> Result<(), DbError> {
+    let (db, user, en_user) = authenticate_user(creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+
+    current_user.bucket(&key)?;
+
+    db.update_one(
+        doc! {
+            "_id": en_user
+        },
+        doc! {
+            "$pull": {
+                "buckets": { "key": key }
+            }
+        },
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Creates the field if its label is new to the bucket, otherwise updates it
+/// in place. Errors if the bucket doesn't exist.
+pub async fn upsert_field(creds: Credentials, key: String, field: Field) -> Result<(), DbError> {
+    let (db, user, en_user) = authenticate_user(creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+
+    let bucket = current_user.bucket(&key)?;
+
+    if bucket.fields.iter().any(|f| f.label == field.label) {
+        db.update_one(
+            doc! {
+                "_id": en_user
+            },
+            doc! {
+                "$set": {
+                    "buckets.$[b].fields.$[f].en_value": field.en_value,
+                    "buckets.$[b].fields.$[f].sensitive": field.sensitive,
+                }
+            },
+        )
+        .array_filters(vec![
+            doc! { "b.key": key },
+            doc! { "f.label": field.label },
+        ])
+        .await?;
+    } else {
+        db.update_one(
+            doc! {
+                "_id": en_user, "buckets.key": key
+            },
+            doc! {
+                "$push": {
+                    "buckets.$.fields": Bson::from(field)
+                }
+            },
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+pub async fn delete_field(
     creds: Credentials,
-    new_password: String,
-    updated_stored_passwords: Vec<String>,
+    key: String,
+    label: String,
 ) -> Result<(), DbError> {
     let (db, user, en_user) = authenticate_user(creds).await?;
-    let _guard = acquire_user_lock(en_user).await;
+    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
 
-    // Re-read the user after acquiring the lock to detect TOCTOU: if another
-    // request changed the master password between our authenticate_user call
-    // and the lock acquisition, the stored master_pw will have changed.
-    let current_user = find_user("", en_user).await?;
-    if current_user.master_key.master_pw != user.master_key.master_pw {
+    let bucket = current_user.bucket(&key)?;
+    if !bucket.fields.iter().any(|f| f.label == label) {
         return Err(DbError::GenericError {
-            error_msg: "Master password was changed by a concurrent request".to_owned(),
+            error_msg: format!("Field {} doesn't exist in bucket {}", label, key),
         });
     }
 
-    if current_user.stored_passwords.len() != updated_stored_passwords.len() {
+    db.update_one(
+        doc! {
+            "_id": en_user, "buckets.key": key
+        },
+        doc! {
+            "$pull": {
+                "buckets.$.fields": { "label": label }
+            }
+        },
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// The client re-encrypts every field value under the new master password
+/// and sends the full replacement `buckets` array. The structure (bucket
+/// keys and field labels, in order) must match what's stored — only the
+/// encrypted values may differ.
+pub async fn change_master_password(
+    creds: Credentials,
+    new_password: String,
+    new_buckets: Vec<Bucket>,
+) -> Result<(), DbError> {
+    let (db, user, en_user) = authenticate_user(creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+
+    if buckets_shape(&current_user.buckets) != buckets_shape(&new_buckets) {
         return Err(DbError::GenericError {
-            error_msg: format!(
-                "Expected {} updated passwords, found {}",
-                current_user.stored_passwords.len(),
-                updated_stored_passwords.len()
-            ),
+            error_msg: "Updated buckets don't structurally match stored buckets".to_owned(),
         });
     }
 
@@ -291,11 +498,10 @@ pub async fn change_master_password(
         doc! {
             "$set": {
                 "master_key": Bson::from(new_mk),
-                "stored_passwords": current_user.stored_passwords
+                "buckets": new_buckets
                     .into_iter()
-                    .zip(updated_stored_passwords.into_iter())
-                    .map(|(kv, en_password)| PasswordKV { key: kv.key, en_password })
-                    .collect::<Vec<PasswordKV>>()
+                    .map(Bson::from)
+                    .collect::<Vec<Bson>>()
             }
         },
     )
@@ -317,7 +523,23 @@ pub async fn delete_user(username: String) -> Result<(), DbError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encrypt::N_ITER;
     use mongodb::bson::from_bson;
+
+    fn field(label: &str, en_value: &str) -> Field {
+        Field {
+            label: label.to_string(),
+            en_value: en_value.to_string(),
+            sensitive: true,
+        }
+    }
+
+    fn bucket(key: &str, fields: Vec<Field>) -> Bucket {
+        Bucket {
+            key: key.to_string(),
+            fields,
+        }
+    }
 
     #[test]
     fn test_oid_len_constant() {
@@ -325,32 +547,70 @@ mod tests {
     }
 
     #[test]
-    fn test_password_kv_serialization() {
-        let kv = PasswordKV {
-            key: "gmail".to_string(),
-            en_password: "encrypted_password_here".to_string(),
+    fn test_field_serialization_roundtrip() {
+        let f = Field {
+            label: "password".to_string(),
+            en_value: "encrypted_value_here".to_string(),
+            sensitive: true,
         };
-        
-        let serialized = serde_json::to_string(&kv).unwrap();
-        let deserialized: PasswordKV = serde_json::from_str(&serialized).unwrap();
-        
-        assert_eq!(deserialized.key, kv.key);
-        assert_eq!(deserialized.en_password, kv.en_password);
+
+        let serialized = serde_json::to_string(&f).unwrap();
+        let deserialized: Field = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.label, f.label);
+        assert_eq!(deserialized.en_value, f.en_value);
+        assert_eq!(deserialized.sensitive, f.sensitive);
     }
 
     #[test]
-    fn test_password_kv_into_bson() {
-        let kv = PasswordKV {
-            key: "test_key".to_string(),
-            en_password: "test_value".to_string(),
+    fn test_bucket_serialization_roundtrip() {
+        let b = bucket(
+            "gmail",
+            vec![field("password", "enc_pw"), field("email", "enc_email")],
+        );
+
+        let serialized = serde_json::to_string(&b).unwrap();
+        let deserialized: Bucket = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.key, "gmail");
+        assert_eq!(deserialized.fields.len(), 2);
+        assert_eq!(deserialized.fields[0].label, "password");
+        assert_eq!(deserialized.fields[1].label, "email");
+    }
+
+    #[test]
+    fn test_field_into_bson() {
+        let f = Field {
+            label: "username".to_string(),
+            en_value: "enc_username".to_string(),
+            sensitive: false,
         };
-        
-        let bson: Bson = kv.clone().into();
-        
-        // Should convert to a document with key and en_password fields
+
+        let bson: Bson = f.into();
+
         if let Bson::Document(doc) = bson {
-            assert_eq!(doc.get_str("key").unwrap(), "test_key");
-            assert_eq!(doc.get_str("en_password").unwrap(), "test_value");
+            assert_eq!(doc.get_str("label").unwrap(), "username");
+            assert_eq!(doc.get_str("en_value").unwrap(), "enc_username");
+            assert!(!doc.get_bool("sensitive").unwrap());
+        } else {
+            panic!("Expected Bson::Document");
+        }
+    }
+
+    #[test]
+    fn test_bucket_into_bson() {
+        let b = bucket("github", vec![field("password", "cipher1")]);
+
+        let bson: Bson = b.into();
+
+        if let Bson::Document(doc) = bson {
+            assert_eq!(doc.get_str("key").unwrap(), "github");
+            let fields = doc.get_array("fields").unwrap();
+            assert_eq!(fields.len(), 1);
+            let f = fields[0].as_document().unwrap();
+            assert_eq!(f.get_str("label").unwrap(), "password");
+            assert_eq!(f.get_str("en_value").unwrap(), "cipher1");
+            assert!(f.get_bool("sensitive").unwrap());
         } else {
             panic!("Expected Bson::Document");
         }
@@ -361,12 +621,18 @@ mod tests {
         let mk = MasterKey::new("test_password").unwrap();
         let original_pw = mk.master_pw.clone();
         let original_salt = mk.salt.clone();
-        
+
         let bson: Bson = mk.into();
-        
+
         if let Bson::Document(doc) = bson {
             assert_eq!(doc.get_str("master_pw").unwrap(), original_pw);
             assert_eq!(doc.get_str("salt").unwrap(), original_salt);
+            let iterations = doc
+                .get_i32("iterations")
+                .map(i64::from)
+                .or_else(|_| doc.get_i64("iterations"))
+                .unwrap();
+            assert_eq!(iterations, i64::from(N_ITER));
         } else {
             panic!("Expected Bson::Document");
         }
@@ -377,32 +643,47 @@ mod tests {
         let user = User {
             en_user: OID::from_bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
             master_key: MasterKey::new("password").unwrap(),
-            stored_passwords: vec![
-                PasswordKV {
-                    key: "site1".to_string(),
-                    en_password: "enc1".to_string(),
-                },
-                PasswordKV {
-                    key: "site2".to_string(),
-                    en_password: "enc2".to_string(),
-                },
+            schema_version: SCHEMA_VERSION,
+            buckets: vec![
+                bucket("site1", vec![field("password", "enc1")]),
+                bucket(
+                    "site2",
+                    vec![field("password", "enc2"), field("email", "enc3")],
+                ),
             ],
         };
-        
+
         let bson = to_bson(&user).unwrap();
         let deserialized: User = from_bson(bson).unwrap();
-        
+
         assert_eq!(deserialized.en_user, user.en_user);
-        assert_eq!(deserialized.stored_passwords.len(), 2);
-        assert_eq!(deserialized.stored_passwords[0].key, "site1");
-        assert_eq!(deserialized.stored_passwords[1].key, "site2");
+        assert_eq!(deserialized.schema_version, SCHEMA_VERSION);
+        assert_eq!(deserialized.buckets.len(), 2);
+        assert_eq!(deserialized.buckets[0].key, "site1");
+        assert_eq!(deserialized.buckets[1].key, "site2");
+        assert_eq!(deserialized.buckets[1].fields.len(), 2);
+    }
+
+    #[test]
+    fn test_user_missing_schema_fields_default() {
+        // A pre-migration document has neither schema_version nor buckets.
+        let bson = to_bson(&doc! {
+            "_id": OID::from_bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+            "master_key": { "master_pw": "AB", "salt": "CD" },
+        })
+        .unwrap();
+        let user: User = from_bson(bson).unwrap();
+
+        assert_eq!(user.schema_version, 0);
+        assert!(user.buckets.is_empty());
+        assert_ne!(user.schema_version, SCHEMA_VERSION);
     }
 
     #[test]
     fn test_db_error_from_crypto_error() {
         let crypto_err = CryptoError::UnspecifiedRingError;
         let db_err: DbError = crypto_err.into();
-        
+
         match db_err {
             DbError::CryptoError(_) => (), // Expected
             _ => panic!("Expected DbError::CryptoError"),
@@ -414,142 +695,113 @@ mod tests {
         let err = DbError::GenericError {
             error_msg: "Test error message".to_string(),
         };
-        
+
         let display = format!("{}", err);
         assert!(display.contains("Test error message"));
     }
 
-    #[test]
-    fn test_password_kv_clone() {
-        let original = PasswordKV {
-            key: "original_key".to_string(),
-            en_password: "original_password".to_string(),
-        };
-        
-        let cloned = original.clone();
-        
-        assert_eq!(cloned.key, original.key);
-        assert_eq!(cloned.en_password, original.en_password);
-    }
+    // ── User bucket lookup helpers ─────────────────────────────────────────
 
-    // Test helper function for validating password update logic
-    fn validate_password_update_count(
-        stored_len: usize,
-        updated_len: usize,
-    ) -> Result<(), &'static str> {
-        if stored_len != updated_len {
-            return Err("Password count mismatch");
+    fn test_user_with_buckets(buckets: Vec<Bucket>) -> User {
+        User {
+            en_user: OID::from_bytes([0; 12]),
+            master_key: MasterKey::new("pw").unwrap(),
+            schema_version: SCHEMA_VERSION,
+            buckets,
         }
-        Ok(())
     }
 
     #[test]
-    fn test_password_update_validation_matching_counts() {
-        assert!(validate_password_update_count(5, 5).is_ok());
-        assert!(validate_password_update_count(0, 0).is_ok());
+    fn test_bucket_lookup_finds_existing_and_rejects_missing() {
+        let user = test_user_with_buckets(vec![
+            bucket("gmail", vec![field("password", "enc1")]),
+            bucket("github", vec![]),
+        ]);
+
+        assert_eq!(user.bucket("github").unwrap().key, "github");
+        assert!(user.bucket("nonexistent").is_err());
     }
 
     #[test]
-    fn test_password_update_validation_mismatched_counts() {
-        assert!(validate_password_update_count(5, 3).is_err());
-        assert!(validate_password_update_count(0, 1).is_err());
+    fn test_assert_no_bucket() {
+        let user = test_user_with_buckets(vec![bucket("gmail", vec![])]);
+
+        assert!(user.assert_no_bucket("gmail").is_err());
+        assert!(user.assert_no_bucket("new_key").is_ok());
     }
 
-    // Test the zip-map logic used in change_master_password
     #[test]
-    fn test_password_kv_update_mapping() {
-        let original_passwords = vec![
-            PasswordKV {
-                key: "gmail".to_string(),
-                en_password: "old_enc1".to_string(),
-            },
-            PasswordKV {
-                key: "github".to_string(),
-                en_password: "old_enc2".to_string(),
-            },
+    fn test_assert_unique_labels() {
+        assert!(assert_unique_labels(&[]).is_ok());
+        assert!(assert_unique_labels(&[field("password", "a")]).is_ok());
+        assert!(
+            assert_unique_labels(&[field("password", "a"), field("email", "b")]).is_ok()
+        );
+        assert!(
+            assert_unique_labels(&[field("password", "a"), field("password", "b")]).is_err()
+        );
+    }
+
+    // ── Structural-match logic used by change_master_password ──────────────
+
+    #[test]
+    fn test_buckets_shape_matches_when_only_values_differ() {
+        let stored = vec![
+            bucket(
+                "gmail",
+                vec![field("password", "old1"), field("email", "old2")],
+            ),
+            bucket("github", vec![field("password", "old3")]),
         ];
-        
-        let new_encrypted = vec!["new_enc1".to_string(), "new_enc2".to_string()];
-        
-        let updated: Vec<PasswordKV> = original_passwords
-            .into_iter()
-            .zip(new_encrypted)
-            .map(|(kv, en_password)| PasswordKV {
-                key: kv.key,
-                en_password,
-            })
-            .collect();
-        
-        assert_eq!(updated.len(), 2);
-        assert_eq!(updated[0].key, "gmail");
-        assert_eq!(updated[0].en_password, "new_enc1");
-        assert_eq!(updated[1].key, "github");
-        assert_eq!(updated[1].en_password, "new_enc2");
+        let updated = vec![
+            bucket(
+                "gmail",
+                vec![field("password", "new1"), field("email", "new2")],
+            ),
+            bucket("github", vec![field("password", "new3")]),
+        ];
+
+        assert_eq!(buckets_shape(&stored), buckets_shape(&updated));
     }
 
-    // Test find logic used in get_stored_password
     #[test]
-    fn test_find_password_by_key() {
-        let passwords = [
-            PasswordKV {
-                key: "gmail".to_string(),
-                en_password: "gmail_enc".to_string(),
-            },
-            PasswordKV {
-                key: "github".to_string(),
-                en_password: "github_enc".to_string(),
-            },
+    fn test_buckets_shape_rejects_structural_changes() {
+        let stored = vec![bucket(
+            "gmail",
+            vec![field("password", "old1"), field("email", "old2")],
+        )];
+
+        // Different bucket key
+        let renamed = vec![bucket(
+            "gmail2",
+            vec![field("password", "new1"), field("email", "new2")],
+        )];
+        assert_ne!(buckets_shape(&stored), buckets_shape(&renamed));
+
+        // Missing field
+        let missing_field = vec![bucket("gmail", vec![field("password", "new1")])];
+        assert_ne!(buckets_shape(&stored), buckets_shape(&missing_field));
+
+        // Extra bucket
+        let extra_bucket = vec![
+            bucket(
+                "gmail",
+                vec![field("password", "new1"), field("email", "new2")],
+            ),
+            bucket("extra", vec![]),
         ];
-        
-        let found = passwords.iter().find(|kv| kv.key == "github");
-        assert!(found.is_some());
-        assert_eq!(found.unwrap().en_password, "github_enc");
-        
-        let not_found = passwords.iter().find(|kv| kv.key == "nonexistent");
-        assert!(not_found.is_none());
+        assert_ne!(buckets_shape(&stored), buckets_shape(&extra_bucket));
+
+        // Reordered fields count as a structural change (sequences compared in order)
+        let reordered = vec![bucket(
+            "gmail",
+            vec![field("email", "new2"), field("password", "new1")],
+        )];
+        assert_ne!(buckets_shape(&stored), buckets_shape(&reordered));
     }
 
-    // Test the key extraction logic used in get_stored_keys
     #[test]
-    fn test_extract_keys_from_passwords() {
-        let passwords = vec![
-            PasswordKV {
-                key: "gmail".to_string(),
-                en_password: "enc1".to_string(),
-            },
-            PasswordKV {
-                key: "github".to_string(),
-                en_password: "enc2".to_string(),
-            },
-            PasswordKV {
-                key: "twitter".to_string(),
-                en_password: "enc3".to_string(),
-            },
-        ];
-        
-        let keys: Vec<String> = passwords.into_iter().map(|kv| kv.key).collect();
-        
-        assert_eq!(keys, vec!["gmail", "github", "twitter"]);
-    }
-
-    // Test the duplicate key detection logic used in add_stored_password
-    #[test]
-    fn test_duplicate_key_detection() {
-        let passwords = [
-            PasswordKV {
-                key: "gmail".to_string(),
-                en_password: "enc1".to_string(),
-            },
-            PasswordKV {
-                key: "github".to_string(),
-                en_password: "enc2".to_string(),
-            },
-        ];
-        
-        let has_gmail = passwords.iter().any(|u| u.key == "gmail");
-        let has_twitter = passwords.iter().any(|u| u.key == "twitter");
-        
-        assert!(has_gmail);
-        assert!(!has_twitter);
+    fn test_buckets_shape_empty_vaults_match() {
+        assert_eq!(buckets_shape(&[]), buckets_shape(&[]));
     }
 }

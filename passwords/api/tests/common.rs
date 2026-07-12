@@ -3,6 +3,10 @@
 //! Provides a shared tokio runtime, Axum router, RAII test user cleanup,
 //! and common helpers. Import via `mod common;` from any test file.
 
+// Each test binary compiles this module separately and uses a different
+// subset of its helpers, so per-binary dead-code warnings are expected.
+#![allow(dead_code)]
+
 use axum::body::Body;
 use axum::{Router, middleware::from_fn, extract::ConnectInfo};
 use http::Request;

@@ -11,7 +11,13 @@ use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
 use std::sync::LazyLock;
 
-pub const N_ITER: u32 = 100_000;
+/// Target iteration count for newly-derived hashes. Stored hashes carry
+/// their own iteration count, so bumping this never locks anyone out —
+/// existing users are lazily re-hashed on their next successful login.
+pub const N_ITER: u32 = 210_000;
+/// Iteration count used by pre-migration documents, which lack an explicit
+/// `iterations` field.
+pub const LEGACY_N_ITER: u32 = 100_000;
 pub const PASSWORD_LEN: usize = 15;
 pub static PBKDF2_ALGO: Algorithm = PBKDF2_HMAC_SHA512;
 pub const SHA256_SALT_LENGTH: usize = SHA512_OUTPUT_LEN / 4;
@@ -39,6 +45,7 @@ pub enum CryptoError {
 }
 
 /// Credentials extracted from request headers.
+#[derive(Clone)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
@@ -81,6 +88,7 @@ impl<'a> UnencryptedMasterKey<'a> {
         Ok(MasterKey {
             master_pw: HEXUPPER.encode(&pbkdf2_hash),
             salt: self.salt,
+            iterations: N_ITER,
         })
     }
 }
@@ -92,6 +100,14 @@ impl<'a> UnencryptedMasterKey<'a> {
 pub struct MasterKey {
     pub master_pw: String,
     pub salt: String,
+    /// Iteration count this hash was derived with. Pre-migration documents
+    /// lack the field and default to the legacy count.
+    #[serde(default = "legacy_n_iter")]
+    pub iterations: u32,
+}
+
+fn legacy_n_iter() -> u32 {
+    LEGACY_N_ITER
 }
 
 impl MasterKey {
@@ -102,15 +118,23 @@ impl MasterKey {
     }
 
     /// Verifies the given `password` hashes to the stored `master_pw` using the stored `salt`.
+    /// Uses `self.iterations` rather than [N_ITER] so hashes derived under an
+    /// older target still verify.
     pub fn verify(&self, password: &str) -> Result<(), CryptoError> {
         pbkdf2::verify(
             PBKDF2_ALGO,
-            NonZeroU32::new(N_ITER).unwrap(),
+            NonZeroU32::new(self.iterations).unwrap(),
             &HEXUPPER.decode(self.salt.as_bytes())?,
             password.as_bytes(),
             &HEXUPPER.decode(self.master_pw.as_bytes())?,
         )
         .map_err(|_| CryptoError::UnspecifiedRingError)
+    }
+
+    /// True if this hash was derived with fewer iterations than the current
+    /// target and should be re-derived while the plaintext is in hand.
+    pub fn needs_rehash(&self) -> bool {
+        self.iterations < N_ITER
     }
 }
 
@@ -181,9 +205,45 @@ mod tests {
     fn test_master_key_new_returns_encrypted_key() {
         let password = "test_password";
         let mk = MasterKey::new(password).unwrap();
-        
+
         assert_ne!(mk.master_pw, password);
         assert_eq!(mk.master_pw.len(), SHA512_OUTPUT_LEN * 2);
+        // New keys are always derived at the current iteration target.
+        assert_eq!(mk.iterations, N_ITER);
+        assert!(!mk.needs_rehash());
+    }
+
+    #[test]
+    fn test_legacy_iteration_hash_verifies_and_needs_rehash() {
+        // Derive a hash manually at the legacy iteration count, as a
+        // pre-migration document would have stored it.
+        let password = "legacy_password";
+        let salt = generate_salt().unwrap();
+        let mut pbkdf2_hash = [0u8; SHA512_OUTPUT_LEN];
+        pbkdf2::derive(
+            PBKDF2_ALGO,
+            NonZeroU32::new(LEGACY_N_ITER).unwrap(),
+            &HEXUPPER.decode(salt.as_bytes()).unwrap(),
+            password.as_bytes(),
+            &mut pbkdf2_hash,
+        );
+        let mk = MasterKey {
+            master_pw: HEXUPPER.encode(&pbkdf2_hash),
+            salt,
+            iterations: LEGACY_N_ITER,
+        };
+
+        assert!(mk.verify(password).is_ok());
+        assert!(mk.verify("wrong_password").is_err());
+        assert!(mk.needs_rehash());
+    }
+
+    #[test]
+    fn test_missing_iterations_field_deserializes_as_legacy() {
+        let mk: MasterKey = serde_json::from_str(r#"{"master_pw":"AB","salt":"CD"}"#).unwrap();
+
+        assert_eq!(mk.iterations, LEGACY_N_ITER);
+        assert!(mk.needs_rehash());
     }
 
     #[test]
@@ -323,7 +383,9 @@ mod tests {
         
         assert_eq!(deserialized.master_pw, mk.master_pw);
         assert_eq!(deserialized.salt, mk.salt);
-        
+        assert_eq!(deserialized.iterations, N_ITER);
+        assert!(!deserialized.needs_rehash());
+
         // The deserialized key should still verify the original password
         assert!(deserialized.verify(password).is_ok());
     }
