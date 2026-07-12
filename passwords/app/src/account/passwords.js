@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { showLoader, hideLoader } from "../loader/loader";
-import { encryptPwWithKey, decryptPwWithKey } from "../crypto/encrypt";
+import { encryptPwWithKey } from "../crypto/encrypt";
+import { apiNewPassword, apiCreateBucket } from "../api";
+import BucketView from "./bucket";
 import Autocomplete from "@mui/material/Autocomplete";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
@@ -11,92 +13,26 @@ import CopyToClipboard from "react-copy-to-clipboard";
 import { KeyBinds } from "../util";
 import "./account.css";
 
-export function QueryPassword({
+export function QueryBucket({
   backend,
-  en_user,
+  auth,
   aesKey,
-  en_pw,
   keys,
+  updateKey,
+  removeKey,
   setErrorMsg
 }) {
-  let [kvs, setKvs] = useState({});
-  let [retrieved, setRetrieved] = useState("");
-  const [open, setOpen] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(null);
 
   const onAcChange = (e, newKey, reason) => {
     if (newKey !== null) {
-      if (!(newKey in kvs)) {
-        fetch(
-          `${backend}/api/v2/passwords/${encodeURIComponent(newKey)}`,
-          {
-            method: "GET",
-            headers: {
-              "x-username": en_user,
-              "x-password": en_pw,
-            },
-          }
-        )
-          .then((response) => {
-            if (response.status !== 200) {
-              throw new Error("Error while trying to get passwords.");
-            }
-            return response.json();
-          })
-          .then((s) => {
-            if (!(newKey in kvs)) {
-              kvs[newKey] = decryptPwWithKey(aesKey, s);
-              setKvs(kvs);
-            }
-            setRetrieved(newKey);
-          })
-          .catch(() => {
-            setErrorMsg("Unable to retrieve stored passwords at this time.");
-          })
-          .finally(() => {
-            hideLoader();
-          });
-      } else {
-        setRetrieved(newKey);
-      }
+      setSelectedKey(newKey);
     }
   };
-
-  const handleClick = () => {
-    setOpen(true);
-  };
-
-  const handleClose = (event, reason) => {
-    if (reason === "clickaway") {
-      return;
-    }
-
-    setOpen(false);
-  };
-
-  const action = (
-    <>
-      <Button
-        sx={{
-          color: "white",
-          backgroundColor: "#3f50b5",
-          ":hover": {
-            backgroundColor: "#282c34"
-          },
-          borderRadius: "4px"
-        }}
-        color="primary"
-        variant="contained"
-        size="small"
-        onClick={handleClose}
-      >
-        Close
-      </Button>
-    </>
-  );
 
   return (
     <div className="Password-container">
-      <div className="Password-header">Select a password to retrieve:</div>
+      <div className="Password-header">Select a bucket to view:</div>
       <Autocomplete
         disablePortal
         id="my-id"
@@ -122,7 +58,7 @@ export function QueryPassword({
           <TextField
             {...s}
             autoFocus={true}
-            label={keys === undefined ? "Loading..." : "Select a password key"}
+            label={keys === undefined ? "Loading..." : "Select a bucket"}
             sx={{
               marginTop: "12px",
               marginBottom: "24px",
@@ -145,47 +81,31 @@ export function QueryPassword({
         )}
         onChange={onAcChange}
       />
-      {retrieved !== "" && (
-        <div style={{ width: "100%" }}>
-          <CopyToClipboard
-            onCopy={() => {
-              handleClick();
-            }}
-            text={kvs[retrieved]}
-          >
-            <Alert
-              sx={{
-                textAlign: "left",
-                ":hover": {
-                  backgroundColor: "black",
-                  cursor: "copy"
-                }
-              }}
-              severity="info"
-            >
-              <AlertTitle> Retrieved password for {retrieved}!</AlertTitle>
-              Click here to copy.
-            </Alert>
-          </CopyToClipboard>
-        </div>
+      {selectedKey !== null && (
+        <BucketView
+          backend={backend}
+          auth={auth}
+          aesKey={aesKey}
+          bucketKey={selectedKey}
+          onRenamed={(oldKey, newKey) => {
+            updateKey(oldKey, newKey);
+            setSelectedKey(newKey);
+          }}
+          onDeleted={(key) => {
+            removeKey(key);
+            setSelectedKey(null);
+          }}
+          setErrorMsg={setErrorMsg}
+        />
       )}
-      <Snackbar
-        open={open}
-        autoHideDuration={6000}
-        onClose={handleClose}
-        message="Password Copied!"
-        action={action}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      />
     </div>
   );
 }
 
-export function NewPassword({
+export function NewBucket({
   backend,
-  en_user,
+  auth,
   aesKey,
-  en_pw,
   keys,
   addNewKey,
   setErrorMsg
@@ -213,51 +133,38 @@ export function NewPassword({
     setOpen(false);
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (key === "") {
-      setErrorMsg("Must specify a key to generate.");
-    }
-    if (key.length > 128) {
-      setErrorMsg("Key name is too long (max 128 characters).");
+      setErrorMsg("Must specify a name for the new bucket.");
       return;
     }
-    if (key in keys) {
-      setErrorMsg("You already have a key of this name!");
+    if (key.length > 128) {
+      setErrorMsg("Bucket name is too long (max 128 characters).");
+      return;
+    }
+    if (keys !== undefined && keys.includes(key)) {
+      setErrorMsg("You already have a bucket of this name!");
+      return;
     }
     showLoader();
-    fetch(`${backend}/api/v2/generate`, {
-      method: "GET"
-    })
-      .then((response) => {
-        if (response.status !== 200) {
-          throw new Error("Error while trying to get new password.");
+    setCopyText("");
+    try {
+      const pwval = await apiNewPassword(backend);
+      await apiCreateBucket(backend, auth, key, [
+        {
+          label: "password",
+          en_value: encryptPwWithKey(aesKey, pwval),
+          sensitive: true
         }
-        return response.json();
-      })
-      .then((pwval) => {
-        fetch(
-          `${backend}/api/v2/passwords/${encodeURIComponent(key)}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-username": en_user,
-              "x-password": en_pw,
-            },
-            body: JSON.stringify({ encrypted_password: encryptPwWithKey(aesKey, pwval) }),
-          }
-        ).then((response) => {
-          if (response.status !== 200) {
-            throw new Error("Error while trying to store new password.");
-          }
-          addNewKey(key);
-          setKey("");
-          setCopyText(pwval);
-        });
-      })
-      .finally(() => {
-        hideLoader();
-      });
+      ]);
+      addNewKey(key);
+      setKey("");
+      setCopyText(pwval);
+    } catch (e) {
+      setErrorMsg("Encountered an error. Please try again.");
+    } finally {
+      hideLoader();
+    }
   };
 
   const action = (
@@ -283,9 +190,9 @@ export function NewPassword({
 
   return (
     <div className="Password-container">
-      <div className="Password-header">Enter a keyname for your password!</div>
+      <div className="Password-header">Enter a name for your new bucket!</div>
       <TextField
-        label="New Keyname"
+        label="New bucket name"
         type="text"
         error={keyError !== ""}
         helperText={keyError}
@@ -338,7 +245,7 @@ export function NewPassword({
         type="button"
         onClick={submit}
       >
-        Generate
+        Create
       </Button>
       <div style={{ width: "100%", marginTop: "16px" }}>
         {copyText !== "" && (
@@ -359,7 +266,7 @@ export function NewPassword({
                 }}
                 severity="info"
               >
-                <AlertTitle>Generated a new password!</AlertTitle>
+                <AlertTitle>Bucket created with a new password!</AlertTitle>
                 Click here to copy.
               </Alert>
             </CopyToClipboard>

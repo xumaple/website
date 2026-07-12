@@ -2,6 +2,7 @@ import sha3 from "crypto-js/sha3";
 import sha256 from "crypto-js/sha256";
 import aes from "crypto-js/aes";
 import Utf8 from "crypto-js/enc-utf8";
+import { apiGetAllBuckets, apiChangeMasterPassword } from "../api";
 
 export const PW_MIN_LEN = 13;
 
@@ -39,45 +40,27 @@ function decryptAES(en_text, key) {
 }
 
 export async function changePasswordWithKey(backend, en_user, oldAesKey, oldEnPw, newAesKey, newEnPw) {
-  let result = await fetch(`${backend}/api/v2/passwords`, {
-    method: "GET",
-    headers: {
-      "x-username": en_user,
-      "x-password": oldEnPw,
-    },
-  })
-    .then((response) => {
-      if (response.status !== 200) {
-        throw new Error("Error while trying to get passwords.");
-      }
-      return response.json();
-    })
-    .then((json) => {
-      const updated_pws = json.map((p) => encryptPwWithKey(newAesKey, decryptPwWithKey(oldAesKey, p)));
-      return fetch(`${backend}/api/v2/user`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "x-username": en_user,
-          "x-password": oldEnPw,
-        },
-        body: JSON.stringify({
-          new_password: newEnPw,
-          passwords: updated_pws,
-        }),
-      })
-        .then((response) => {
-          if (response.status !== 200) {
-            throw new Error("Error while trying to update passwords");
-          }
-          return true;
-        });
-    })
-    .catch(() => {
-      return false;
-    });
-
-  return result !== false;
+  const auth = { en_user, en_pw: oldEnPw };
+  try {
+    const buckets = await apiGetAllBuckets(backend, auth);
+    // Re-encrypt every field of every bucket under the new AES key,
+    // preserving bucket keys, field labels, sensitivity, and order.
+    const updated_buckets = buckets.map((bucket) => ({
+      key: bucket.key,
+      fields: bucket.fields.map((field) => ({
+        label: field.label,
+        en_value: encryptPwWithKey(
+          newAesKey,
+          decryptPwWithKey(oldAesKey, field.en_value)
+        ),
+        sensitive: field.sensitive,
+      })),
+    }));
+    await apiChangeMasterPassword(backend, auth, newEnPw, updated_buckets);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 export function checkPassword(pw, currErr, setErrorMsg) {

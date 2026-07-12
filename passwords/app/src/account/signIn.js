@@ -3,6 +3,7 @@ import { errorColor, backgroundColor } from "../theme";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import { encryptMaster, shaHash, checkPassword } from "../crypto/encrypt";
+import { apiCreateUser, apiVerifyUser } from "../api";
 import { showLoader, hideLoader } from "../loader/loader";
 import { KeyBinds } from "../util";
 import "./account.css";
@@ -38,22 +39,12 @@ export default function SignIn({ user, backend, setAccountInfo }) {
     const aesKey = shaHash(password);
     setPasswordHook("");
     showLoader();
-    fetch(
-      isCreatingAccount
-        ? `${backend}/api/v2/user`
-        : `${backend}/api/v2/user/verify`,
-      {
-        method: isCreatingAccount ? "POST" : "GET",
-        headers: {
-          "x-username": submittedUser,
-          "x-password": submittedPw,
-        },
-      }
+    const auth = { en_user: submittedUser, en_pw: submittedPw };
+    (isCreatingAccount
+      ? apiCreateUser(backend, auth)
+      : apiVerifyUser(backend, auth)
     )
-      .then((response) => {
-        if (response.status !== 200) {
-          throw new Error("Unable to log in.");
-        }
+      .then(() => {
         setAccountInfo(username, submittedUser, aesKey, submittedPw);
       })
       .catch(() => {

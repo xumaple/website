@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useReducer } from "react";
 import { encryptPwWithKey } from "../crypto/encrypt";
+import { apiCreateBucket } from "../api";
 import Modal from "react-modal";
 import TextField from "@mui/material/TextField";
 import GoodCircle from "@mui/icons-material/CheckCircle";
@@ -80,25 +81,19 @@ let PasswordInput = ({
     setInnerUploadState(UPLOAD_PENDING);
     setCurrentlyUploading(true);
 
-    fetch(
-      `${backend}/api/v2/passwords/${encodeURIComponent(key)}`,
+    apiCreateBucket(backend, { en_user, en_pw }, key, [
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-username": en_user,
-          "x-password": en_pw,
-        },
-        body: JSON.stringify({ encrypted_password: encryptPwWithKey(aesKey, pw) }),
-      }
-    )
-      .then((response) => {
-        if (response.status !== 200) {
-          setUploadState(UPLOAD_BAD);
-          throw new Error("Error while trying to store new password.");
-        }
+        label: "password",
+        en_value: encryptPwWithKey(aesKey, pw),
+        sensitive: true,
+      },
+    ])
+      .then(() => {
         setUploadState(UPLOAD_GOOD);
         addNewKey(key);
+      })
+      .catch(() => {
+        setUploadState(UPLOAD_BAD);
       })
       .finally(() => {
         setCurrentlyUploading(false);

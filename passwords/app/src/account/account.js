@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import SettingsModal from "./settings/settings";
-import { QueryPassword, NewPassword } from "./passwords";
+import { QueryBucket, NewBucket } from "./passwords";
 import AddPasswordsModal from "./addpasswords";
+import { apiGetBucketKeys } from "../api";
 import { showLoader, hideLoader } from "../loader/loader";
 import { errorColor, backgroundColor } from "../theme";
 import "./account.css";
@@ -37,28 +38,33 @@ export default function Account({
   let [currEnPw, setCurrEnPw] = useState(en_pw);
   const [open, setOpen] = useState(false);
 
+  const auth = useMemo(
+    () => ({ en_user, en_pw: currEnPw }),
+    [en_user, currEnPw]
+  );
+
   let [keys, setKeys] = useState(undefined);
   const addNewKey = (newKey) => {
     setKeys((prevKeys) =>
       prevKeys === undefined ? [newKey] : prevKeys.concat([newKey])
     );
   };
+  const updateKey = (oldKey, newKey) => {
+    setKeys((prevKeys) =>
+      prevKeys === undefined
+        ? prevKeys
+        : prevKeys.map((k) => (k === oldKey ? newKey : k))
+    );
+  };
+  const removeKey = (key) => {
+    setKeys((prevKeys) =>
+      prevKeys === undefined ? prevKeys : prevKeys.filter((k) => k !== key)
+    );
+  };
   useEffect(() => {
     if (keys === undefined) {
       showLoader();
-      fetch(`${backend}/api/v2/keys`, {
-        method: "GET",
-        headers: {
-          "x-username": en_user,
-          "x-password": currEnPw,
-        },
-      })
-        .then((response) => {
-          if (response.status !== 200) {
-            throw new Error("Error while trying to get keys.");
-          }
-          return response.json();
-        })
+      apiGetBucketKeys(backend, auth)
         .then((updatedKeys) => {
           setKeys(updatedKeys);
         })
@@ -72,12 +78,12 @@ export default function Account({
   });
 
   const [errorMsg, setErrorMsgHook] = useState("");
-  const setErrorMsg = (msg) => {
+  const setErrorMsg = useCallback((msg) => {
     setTimeout(() => {
       setErrorMsgHook("");
     }, ERROR_MSG_TIME_IN_MS);
     setErrorMsgHook(msg);
-  };
+  }, []);
 
   const setQueryView = (b) => {
     showLoader();
@@ -165,20 +171,20 @@ export default function Account({
       </div>
       <div className="Account-info">
         {isQueryView ? (
-          <QueryPassword
+          <QueryBucket
             backend={backend}
-            en_user={en_user}
+            auth={auth}
             aesKey={currAesKey}
-            en_pw={currEnPw}
             keys={keys}
+            updateKey={updateKey}
+            removeKey={removeKey}
             setErrorMsg={setErrorMsg}
           />
         ) : (
-          <NewPassword
+          <NewBucket
             backend={backend}
-            en_user={en_user}
+            auth={auth}
             aesKey={currAesKey}
-            en_pw={currEnPw}
             keys={keys}
             addNewKey={addNewKey}
             setErrorMsg={setErrorMsg}
@@ -214,7 +220,7 @@ export default function Account({
               }
             }}
           >
-            {isQueryView ? "Add new password" : "Query an existing password"}
+            {isQueryView ? "Add a new bucket" : "View existing buckets"}
           </Fab>
         )}
       </div>

@@ -7,13 +7,14 @@ const { test, expect } = require("@playwright/test");
  * Exercises the full user journey through the React frontend and Rocket API:
  *
  *   1. Create a new user with a random username / password.
- *   2. Add a password via the default "Add new password" flow and capture it.
- *   3. Add a password via the sidebar "Manually Add Passwords" modal.
- *   4. Query both passwords and verify they are correct.
+ *   2. Create a bucket via the default "Add a new bucket" flow and capture
+ *      its generated password.
+ *   3. Add a bucket via the sidebar "Manually Add Passwords" modal.
+ *   4. Open both buckets and verify their password fields are correct.
  *   5. Change the master password.
  *   6. Log out (clears browser-side state).
  *   7. Log back in with the new master password.
- *   8. Query both passwords again — confirm they survived the password change.
+ *   8. Open both buckets again — confirm they survived the password change.
  *   9. Delete the test user via the API (cleanup).
  *
  * The tests run sequentially (test.describe.serial) because each step depends
@@ -73,7 +74,7 @@ test.describe.serial("Full user journey", () => {
     // The delete endpoint expects the same SHA3-hashed username that the
     // frontend sends during sign-up / login. We captured it in the create step.
     if (ctx.hashedUsername) {
-      await request.delete(`${API}/api/v2/user`, {
+      await request.delete(`${API}/api/v3/user`, {
         headers: {
           "x-username": ctx.hashedUsername,
           "x-password": "unused",
@@ -106,7 +107,7 @@ test.describe.serial("Full user journey", () => {
     // frontend sends to the API. We need this for cleanup in afterAll.
     const signupPromise = page.waitForRequest(
       (req) =>
-        req.url().endsWith("/api/v2/user") && req.method() === "POST"
+        req.url().endsWith("/api/v3/user") && req.method() === "POST"
     );
 
     // Submit.
@@ -117,69 +118,71 @@ test.describe.serial("Full user journey", () => {
     ctx.hashedUsername = signupReq.headers()["x-username"];
 
     // After successful sign-up we land on the account view which shows
-    // "Select a password to retrieve:" in the query view.
+    // "Select a bucket to view:" in the query view.
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText("Select a bucket to view:")
     ).toBeVisible({ timeout: 15_000 });
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 2: Add a password via the default "Generate" flow
+  // Step 2: Create a bucket via the default "Add a new bucket" flow
   // ────────────────────────────────────────────────────────────────────────
-  test("add a generated password", async () => {
-    // Click the FAB to switch to the "Add new password" view.
-    await page.getByRole("button", { name: "Add new password" }).click();
+  test("create a bucket with a generated password", async () => {
+    // Click the FAB to switch to the "Add a new bucket" view.
+    await page.getByRole("button", { name: "Add a new bucket" }).click();
     await expect(
-      page.getByText("Enter a keyname for your password!")
+      page.getByText("Enter a name for your new bucket!")
     ).toBeVisible();
 
-    // Type the key name.
-    await page.getByLabel("New Keyname").fill(ctx.generatedKey);
+    // Type the bucket name.
+    await page.getByLabel("New bucket name").fill(ctx.generatedKey);
 
-    // Intercept the /api/v1/get/newpw response so we can capture the
+    // Intercept the /api/v3/generate response so we can capture the
     // generated password value before it gets AES-encrypted.
     const newPwPromise = page.waitForResponse(
       (resp) =>
-        resp.url().includes("/api/v2/generate") && resp.status() === 200
+        resp.url().includes("/api/v3/generate") && resp.status() === 200
     );
 
-    // Click "Generate".
-    await page.getByRole("button", { name: "Generate" }).click();
+    // Click "Create".
+    await page.getByRole("button", { name: "Create" }).click();
 
     // Capture the generated plaintext password from the API response.
     const newPwResponse = await newPwPromise;
     ctx.generatedPassword = await newPwResponse.json();
     expect(ctx.generatedPassword.length).toBeGreaterThan(0);
 
-    // The UI should now show "Generated a new password!".
-    await expect(page.getByText("Generated a new password!")).toBeVisible();
+    // The UI should now show "Bucket created with a new password!".
+    await expect(
+      page.getByText("Bucket created with a new password!")
+    ).toBeVisible();
   });
 
   // ────────────────────────────────────────────────────────────────────────
   // Step 2b: Reject a too-long key in the generate flow
   // ────────────────────────────────────────────────────────────────────────
   test("reject a too-long key in generate flow", async () => {
-    // We should still be in the generate view from step 2.
+    // We should still be in the new-bucket view from step 2.
     await expect(
-      page.getByText("Enter a keyname for your password!")
+      page.getByText("Enter a name for your new bucket!")
     ).toBeVisible();
 
     // Type a key that exceeds the 128-character limit.
-    await page.getByLabel("New Keyname").fill("a".repeat(129));
+    await page.getByLabel("New bucket name").fill("a".repeat(129));
 
     // The inline validation error should appear.
     await expect(
       page.getByText("Key is too long (max 128 characters).")
     ).toBeVisible({ timeout: 5_000 });
 
-    // The Generate button should be disabled.
+    // The Create button should be disabled.
     await expect(
-      page.getByRole("button", { name: "Generate" })
+      page.getByRole("button", { name: "Create" })
     ).toBeDisabled();
 
     // Clear the field so subsequent tests start clean.
-    // Stay in new-password view — step 3 opens the drawer from here.
-    await page.getByLabel("New Keyname").fill("");
+    // Stay in new-bucket view — step 3 opens the drawer from here.
+    await page.getByLabel("New bucket name").fill("");
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -202,7 +205,7 @@ test.describe.serial("Full user journey", () => {
 
     // Fill in the key and password fields inside the modal.
     // Scope selectors to the modal dialog to avoid ambiguity with the
-    // underlying "New Keyname" field.
+    // underlying "New bucket name" field.
     const modal = page.locator("[role='dialog']");
     await modal.getByLabel("key").fill(ctx.manualKey);
     await modal.getByLabel("password").fill(ctx.manualPassword);
@@ -309,36 +312,36 @@ test.describe.serial("Full user journey", () => {
     // dropdown — without a page refresh. This is the regression check: before
     // the fix only the last-uploaded key appeared.
     await page
-      .getByRole("button", { name: "Query an existing password" })
+      .getByRole("button", { name: "View existing buckets" })
       .click();
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText("Select a bucket to view:")
     ).toBeVisible();
 
-    // Query first bulk password.
+    // Open first bulk bucket.
     await queryAndVerifyPassword(page, ctx.bulkKey1, ctx.bulkPassword1);
 
-    // Query second bulk password.
+    // Open second bulk bucket.
     await queryAndVerifyPassword(page, ctx.bulkKey2, ctx.bulkPassword2);
 
-    // Switch back to add-password view so the rest of the suite (step 4) can
+    // Switch back to new-bucket view so the rest of the suite (step 4) can
     // start from the right view.
-    await page.getByRole("button", { name: "Add new password" }).click();
+    await page.getByRole("button", { name: "Add a new bucket" }).click();
     await expect(
-      page.getByText("Enter a keyname for your password!")
+      page.getByText("Enter a name for your new bucket!")
     ).toBeVisible();
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 4: Query both passwords and verify correctness
+  // Step 4: Open both buckets and verify their passwords
   // ────────────────────────────────────────────────────────────────────────
   test("query both passwords", async () => {
     // Switch back to query view via the FAB.
     await page
-      .getByRole("button", { name: "Query an existing password" })
+      .getByRole("button", { name: "View existing buckets" })
       .click();
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText("Select a bucket to view:")
     ).toBeVisible();
 
     // --- Query the generated password ---
@@ -351,10 +354,10 @@ test.describe.serial("Full user journey", () => {
   // ────────────────────────────────────────────────────────────────────────
   // Step 4b: Error message appears when a password query fails
   // ────────────────────────────────────────────────────────────────────────
-  test("error message appears when password query fails", async () => {
+  test("error message appears when bucket query fails", async () => {
     // We should be in the query view from step 4.
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText("Select a bucket to view:")
     ).toBeVisible();
 
     // The error div should be invisible initially — it has the -invis class
@@ -363,14 +366,13 @@ test.describe.serial("Full user journey", () => {
     await expect(page.locator(".SignIn-error-invis")).toBeAttached();
     await expect(page.locator(".SignIn-error")).not.toBeAttached();
 
-    // Intercept the next password fetch and abort it to simulate a failure.
-    await page.route("**/api/v2/passwords/**", (route) => route.abort());
+    // Intercept the next bucket fetch and abort it to simulate a failure.
+    await page.route("**/api/v3/bucket/**", (route) => route.abort());
 
-    // Use bulkKey1 — it wasn't fetched in this component mount (step 4 only
-    // queried generated and manual keys), so selecting it triggers a fresh
-    // API call that hits the route intercept above.
+    // Selecting any bucket triggers a fresh API call (BucketView always
+    // re-fetches on selection) that hits the route intercept above.
     const autocomplete = page.getByRole("combobox", {
-      name: "Select a password key",
+      name: "Select a bucket",
     });
     await autocomplete.click();
     await autocomplete.fill("");
@@ -379,13 +381,13 @@ test.describe.serial("Full user journey", () => {
 
     // The error message should appear.
     await expect(
-      page.getByText("Unable to retrieve stored passwords at this time.")
+      page.getByText("Unable to retrieve stored buckets at this time.")
     ).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(".SignIn-error")).toBeVisible();
 
     // Remove the route intercept so subsequent tests work normally.
     // Auto-clear after 10s is covered by the unit test (account.test.js).
-    await page.unroute("**/api/v2/passwords/**");
+    await page.unroute("**/api/v3/bucket/**");
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -450,12 +452,12 @@ test.describe.serial("Full user journey", () => {
 
     // Wait for the account view to load.
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText("Select a bucket to view:")
     ).toBeVisible({ timeout: 15_000 });
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 8: Query passwords again — they should be unchanged
+  // Step 8: Open buckets again — they should be unchanged
   // ────────────────────────────────────────────────────────────────────────
   test("passwords survive master password change", async () => {
     // Query the generated password.
@@ -507,13 +509,13 @@ test.describe.serial("Backwards compatibility", () => {
 
     // Wait for the account view to load.
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText("Select a bucket to view:")
     ).toBeVisible({ timeout: 15_000 });
   });
 
   test("backcompat user passwords decrypt to expected plaintext values", async () => {
-    // Select each key from the dropdown, retrieve the password, and verify
-    // the decrypted value matches the expected plaintext.
+    // Select each bucket from the dropdown, open it, and verify the
+    // decrypted "password" field matches the expected plaintext.
     for (const [key, expectedPlaintext] of Object.entries(BACKCOMPAT_EXPECTED_PASSWORDS)) {
       await queryAndVerifyPassword(page, key, expectedPlaintext);
     }
@@ -523,20 +525,20 @@ test.describe.serial("Backwards compatibility", () => {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Select a key from the Autocomplete dropdown, intercept the API response
- * to get the encrypted password, and verify it decrypts to the expected value.
+ * Select a bucket from the Autocomplete dropdown, wait for the BucketView to
+ * load its fields, and verify the "password" field decrypts to the expected
+ * value.
  *
  * Because decryption happens client-side via CryptoJS and verifying it in
- * Playwright would require duplicating the crypto logic, we instead intercept
- * the /api/v2/passwords/<key> response AND read the decrypted text from the
- * UI's "Retrieved password for <key>!" alert. The alert has a "Click here to
- * copy" element — the CopyToClipboard component wraps the decrypted value.
- * However the decrypted value is NOT displayed as text; it's only in the
- * clipboard on click. So we grant clipboard permissions and read it.
+ * Playwright would require duplicating the crypto logic, we instead use the
+ * copy button on the "password" field row (sensitive values render as masked
+ * dots, so the plaintext is only observable via the clipboard). We grant
+ * clipboard permissions and read the copied value.
  *
  * @param {import('@playwright/test').Page} page
- * @param {string} key       - The password key name to select
- * @param {string} expected  - The expected plaintext password value
+ * @param {string} key       - The bucket key name to select
+ * @param {string} expected  - The expected plaintext value of the bucket's
+ *                             "password" field
  */
 async function queryAndVerifyPassword(page, key, expected) {
   // Grant clipboard-read permission so we can verify the copied value.
@@ -545,7 +547,7 @@ async function queryAndVerifyPassword(page, key, expected) {
   // Target the combobox input specifically (MUI Autocomplete renders both
   // an input[role=combobox] and a ul[role=listbox] with the same label).
   const autocomplete = page.getByRole("combobox", {
-    name: "Select a password key",
+    name: "Select a bucket",
   });
   await autocomplete.click();
 
@@ -556,17 +558,23 @@ async function queryAndVerifyPassword(page, key, expected) {
   // Wait for the dropdown option to appear and click it.
   await page.getByRole("option", { name: key }).click();
 
-  // Wait for the "Retrieved password for <key>!" alert.
-  await expect(
-    page.getByText(`Retrieved password for ${key}!`)
-  ).toBeVisible({ timeout: 10_000 });
+  // The BucketView loads: its header shows the bucket key and each field is
+  // rendered as a row. Wait for the "password" field's copy button.
+  const copyButton = page.getByRole("button", { name: "copy password" });
+  await expect(copyButton).toBeVisible({ timeout: 10_000 });
 
-  // Click the alert to copy the password to clipboard.
-  await page.getByText("Click here to copy.").click();
+  // Click the copy icon to copy the password field's value to the clipboard.
+  await copyButton.click();
+
+  // The "Copied!" snackbar confirms the copy happened.
+  await expect(page.getByText("Copied!")).toBeVisible({ timeout: 5_000 });
 
   // Read the clipboard and verify.
   const clipboardText = await page.evaluate(() =>
     navigator.clipboard.readText()
   );
   expect(clipboardText).toBe(expected);
+
+  // Dismiss the snackbar so it doesn't overlap later assertions.
+  await page.keyboard.press("Escape");
 }
