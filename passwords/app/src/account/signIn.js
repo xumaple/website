@@ -6,6 +6,7 @@ import { encryptMaster, shaHash, checkPassword } from "../crypto/encrypt";
 import { apiCreateUser, apiVerifyUser } from "../api";
 import { showLoader, hideLoader } from "../loader/loader";
 import { KeyBinds } from "../util";
+import { ACCENT, textFieldSx, inputLabelProps, primaryButtonSx } from "./styles";
 import "./account.css";
 
 const ERROR_MSG_TIME_IN_MS = 10000;
@@ -106,22 +107,8 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           onKeyPress={(e) => {
             onKeyPress(e, isCreatingAccount);
           }}
-          sx={{
-            fieldset: { borderColor: "black" },
-            input: { color: "black" },
-            label: { color: "black" },
-            "& .MuiOutlinedInput-root": {
-              "&.Mui-focused fieldset": {
-                borderColor: "#3f50b5",
-              },
-            },
-            "&:hover fieldset": {
-              borderColor: "#3f50b5 !important",
-            },
-          }}
-          InputLabelProps={{
-            sx: { "&.Mui-focused": { color: "#3f50b5" } },
-          }}
+          sx={textFieldSx}
+          InputLabelProps={inputLabelProps}
         />
         <TextField
           type="password"
@@ -133,23 +120,8 @@ export default function SignIn({ user, backend, setAccountInfo }) {
           onKeyPress={(e) => {
             onKeyPress(e, isCreatingAccount);
           }}
-          sx={{
-            marginTop: "12px",
-            fieldset: { borderColor: "black" },
-            input: { color: "black" },
-            label: { color: "black" },
-            "& .MuiOutlinedInput-root": {
-              "&.Mui-focused fieldset": {
-                borderColor: "#3f50b5",
-              },
-            },
-            "&:hover fieldset": {
-              borderColor: "#3f50b5 !important",
-            },
-          }}
-          InputLabelProps={{
-            sx: { "&.Mui-focused": { color: "#3f50b5" } },
-          }}
+          sx={{ marginTop: "12px", ...textFieldSx }}
+          InputLabelProps={inputLabelProps}
         />
         <div
           className={
@@ -167,17 +139,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
       <Button
         variant="contained"
         type="button"
-        sx={{
-          width: "100%",
-          height: "45px",
-          borderRadius: "8px",
-          backgroundColor: "#282c34",
-          ":hover": {
-            backgroundColor: "#3f50b5",
-          },
-          fontWeight: "bold",
-          color: "white",
-        }}
+        sx={primaryButtonSx}
         onClick={submit}
       >
         {isCreatingAccount ? "Sign up" : "Log In"}
@@ -186,7 +148,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
         <p style={{ fontSize: "18px" }}>
           Have an account already? Log in{" "}
           <span
-            style={{ color: "#3f50b5" }}
+            style={{ color: ACCENT }}
             onClick={() => {
               toggleCreatingAccount(false);
             }}
@@ -199,7 +161,7 @@ export default function SignIn({ user, backend, setAccountInfo }) {
         <p style={{ fontSize: "18px" }}>
           First time? Sign up{" "}
           <span
-            style={{ color: "#3f50b5" }}
+            style={{ color: ACCENT }}
             onClick={() => {
               toggleCreatingAccount(true);
             }}

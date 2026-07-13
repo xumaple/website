@@ -65,7 +65,7 @@ describe("Account error message display", () => {
     });
 
     expect(
-      screen.getByText("Unable to retrieve stored passwords at this time.")
+      screen.getByText("Unable to retrieve your accounts at this time.")
     ).toBeInTheDocument();
     expect(document.querySelector(".SignIn-error")).toBeInTheDocument();
     expect(document.querySelector(".SignIn-error-invis")).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("Account error message display", () => {
 
     // Error is visible.
     expect(
-      screen.getByText("Unable to retrieve stored passwords at this time.")
+      screen.getByText("Unable to retrieve your accounts at this time.")
     ).toBeInTheDocument();
     expect(document.querySelector(".SignIn-error")).toBeInTheDocument();
 
