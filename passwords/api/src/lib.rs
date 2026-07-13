@@ -410,6 +410,14 @@ async fn create_bucket(
     ValidatedKey(key): ValidatedKey,
     Json(fields): Json<Vec<Field>>,
 ) -> Result<StatusCode, Error> {
+    // Labels arriving in the body bypass the path extractors' validation; an
+    // over-long label would create a field the path-based field routes can
+    // never address again.
+    for field in &fields {
+        if !is_valid_key_length(&field.label) {
+            return Err(Error::KeyTooLong(field.label.len()));
+        }
+    }
     db::create_bucket(creds, key, fields).await?;
     tracing::info!("ok");
     Ok(StatusCode::OK)

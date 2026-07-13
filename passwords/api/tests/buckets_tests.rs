@@ -591,6 +591,28 @@ fn test_v3_key_and_label_length_limits() {
         .await;
         assert_eq!(res.status(), StatusCode::NOT_FOUND, "long new_key on rename");
 
+        // Over-long field label inside the create-bucket body (bypasses the
+        // path extractors — must be caught by the handler's body validation)
+        let res = send(
+            "POST",
+            "/api/v3/bucket/othersite",
+            user,
+            pw,
+            Some(json!([field_json(&long, "enc", true)])),
+        )
+        .await;
+        assert_eq!(
+            res.status(),
+            StatusCode::NOT_FOUND,
+            "long label in create body"
+        );
+        let res = send("GET", "/api/v3/bucket/othersite", user, pw, None).await;
+        assert_eq!(
+            res.status(),
+            StatusCode::NOT_FOUND,
+            "bucket not created when a body label is too long"
+        );
+
         // Over-long field label on upsert
         let res = send(
             "PUT",

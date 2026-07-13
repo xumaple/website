@@ -169,7 +169,7 @@ pub async fn connect() -> Result<(), DbError> {
 }
 
 async fn authenticate_user(
-    creds: Credentials,
+    creds: &Credentials,
 ) -> Result<(&'static Collection<User>, User, OID), DbError> {
     let db = DB.get().unwrap();
     let en_user = user2oid(&creds.username);
@@ -248,10 +248,17 @@ async fn rehash_master_key(
 async fn lock_and_reread(
     user: &User,
     en_user: OID,
+    password: &str,
 ) -> Result<(tokio::sync::OwnedMutexGuard<()>, User), DbError> {
     let guard = acquire_user_lock(en_user).await;
     let current_user = find_user("", en_user).await?;
-    if current_user.master_key.master_pw != user.master_key.master_pw {
+    // A hash mismatch is either a genuine concurrent master-password change
+    // or a concurrent lazy re-hash of the SAME password (fresh salt +
+    // iterations). Only the former must abort; re-verifying the plaintext
+    // disambiguates, and costs a PBKDF2 pass only on this rare mismatch path.
+    if current_user.master_key.master_pw != user.master_key.master_pw
+        && current_user.master_key.verify(password).is_err()
+    {
         return Err(DbError::GenericError {
             error_msg: "Master password was changed by a concurrent request".to_owned(),
         });
@@ -287,7 +294,7 @@ pub async fn add_user(creds: Credentials) -> Result<(), DbError> {
 }
 
 pub async fn verify_user(creds: Credentials) -> Result<(), DbError> {
-    let _ = authenticate_user(creds).await?;
+    let _ = authenticate_user(&creds).await?;
     Ok(())
 }
 
@@ -310,19 +317,19 @@ pub async fn find_user(username: &str, en_user: OID) -> Result<User, DbError> {
 }
 
 pub async fn get_bucket_keys(creds: Credentials) -> Result<Vec<String>, DbError> {
-    let (_, user, _) = authenticate_user(creds).await?;
+    let (_, user, _) = authenticate_user(&creds).await?;
     Ok(user.buckets.into_iter().map(|b| b.key).collect())
 }
 
 /// Full buckets with encrypted values — used by the client to re-encrypt
 /// everything when changing the master password.
 pub async fn get_all_buckets(creds: Credentials) -> Result<Vec<Bucket>, DbError> {
-    let (_, user, _) = authenticate_user(creds).await?;
+    let (_, user, _) = authenticate_user(&creds).await?;
     Ok(user.buckets)
 }
 
 pub async fn get_bucket(creds: Credentials, key: String) -> Result<Bucket, DbError> {
-    let (_, user, _) = authenticate_user(creds).await?;
+    let (_, user, _) = authenticate_user(&creds).await?;
     Ok(user.bucket(&key)?.clone())
 }
 
@@ -331,8 +338,8 @@ pub async fn create_bucket(
     key: String,
     fields: Vec<Field>,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(creds).await?;
-    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+    let (db, user, en_user) = authenticate_user(&creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user, &creds.password).await?;
 
     current_user.assert_no_bucket(&key)?;
     assert_unique_labels(&fields)?;
@@ -357,8 +364,8 @@ pub async fn rename_bucket(
     key: String,
     new_key: String,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(creds).await?;
-    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+    let (db, user, en_user) = authenticate_user(&creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user, &creds.password).await?;
 
     current_user.bucket(&key)?;
     current_user.assert_no_bucket(&new_key)?;
@@ -379,8 +386,8 @@ pub async fn rename_bucket(
 }
 
 pub async fn delete_bucket(creds: Credentials, key: String) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(creds).await?;
-    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+    let (db, user, en_user) = authenticate_user(&creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user, &creds.password).await?;
 
     current_user.bucket(&key)?;
 
@@ -402,8 +409,8 @@ pub async fn delete_bucket(creds: Credentials, key: String) -> Result<(), DbErro
 /// Creates the field if its label is new to the bucket, otherwise updates it
 /// in place. Errors if the bucket doesn't exist.
 pub async fn upsert_field(creds: Credentials, key: String, field: Field) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(creds).await?;
-    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+    let (db, user, en_user) = authenticate_user(&creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user, &creds.password).await?;
 
     let bucket = current_user.bucket(&key)?;
 
@@ -446,8 +453,8 @@ pub async fn delete_field(
     key: String,
     label: String,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(creds).await?;
-    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+    let (db, user, en_user) = authenticate_user(&creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user, &creds.password).await?;
 
     let bucket = current_user.bucket(&key)?;
     if !bucket.fields.iter().any(|f| f.label == label) {
@@ -480,8 +487,8 @@ pub async fn change_master_password(
     new_password: String,
     new_buckets: Vec<Bucket>,
 ) -> Result<(), DbError> {
-    let (db, user, en_user) = authenticate_user(creds).await?;
-    let (_guard, current_user) = lock_and_reread(&user, en_user).await?;
+    let (db, user, en_user) = authenticate_user(&creds).await?;
+    let (_guard, current_user) = lock_and_reread(&user, en_user, &creds.password).await?;
 
     if buckets_shape(&current_user.buckets) != buckets_shape(&new_buckets) {
         return Err(DbError::GenericError {
