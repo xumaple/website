@@ -4,7 +4,15 @@ import { QueryAccount, NewAccount } from "./passwords";
 import { apiGetBucketKeys } from "../api";
 import { showLoader, hideLoader } from "../loader/loader";
 import { errorColor, backgroundColor } from "../theme";
-import { ACCENT, INK } from "./styles";
+import { ACCENT, INK, primarySmallButtonSx } from "./styles";
+import {
+  biometricLabel,
+  isBiometricAvailable,
+  isBiometricEnrolled,
+  isBiometricPromoDismissed,
+  dismissBiometricPromo,
+  enrollBiometric,
+} from "../crypto/biometric";
 import "./account.css";
 import userIcon from "../assets/icons/user-inverted.png";
 import Fab from "@mui/material/Fab";
@@ -18,6 +26,8 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
+import Button from "@mui/material/Button";
+import Snackbar from "@mui/material/Snackbar";
 
 const TOGGLE_VIEW_DELAY_IN_MS = 300;
 const ERROR_MSG_TIME_IN_MS = 10000;
@@ -88,6 +98,53 @@ export default function Account({
     }, ERROR_MSG_TIME_IN_MS);
     setErrorMsgHook(msg);
   }, []);
+
+  // Offer biometric unlock once per login for users who haven't set it up
+  // and haven't said "Not now". "offer" shows Enable / Not now; "done"
+  // confirms after a successful enrollment.
+  const [bioPromo, setBioPromo] = useState(null);
+  useEffect(() => {
+    if (isBiometricEnrolled() || isBiometricPromoDismissed()) return;
+    let cancelled = false;
+    isBiometricAvailable().then((ok) => {
+      if (ok && !cancelled) setBioPromo("offer");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const enableBiometricFromPromo = async () => {
+    try {
+      await enrollBiometric({
+        username,
+        en_user,
+        aesKey: currAesKey,
+        en_pw: currEnPw,
+      });
+      setBioPromo("done");
+    } catch (e) {
+      // A cancelled OS prompt keeps the offer available on the next login;
+      // "Not now" is the only way to opt out of seeing it.
+      setBioPromo(null);
+      if (!(e && e.name === "NotAllowedError")) {
+        setErrorMsg(`Unable to turn on ${biometricLabel()}.`);
+      }
+    }
+  };
+
+  const declineBiometricPromo = () => {
+    dismissBiometricPromo();
+    setBioPromo(null);
+  };
+
+  // If the user enrolls from the settings modal while the offer is up,
+  // retire the offer instead of re-showing it when settings closes.
+  useEffect(() => {
+    if (!showSettings && bioPromo === "offer" && isBiometricEnrolled()) {
+      setBioPromo(null);
+    }
+  }, [showSettings, bioPromo]);
 
   const setQueryView = (b) => {
     showLoader();
@@ -227,6 +284,52 @@ export default function Account({
         setEnPassword={setCurrEnPw}
         show={showSettings}
         stopShowing={() => setShowSettings(false)}
+      />
+      {/* Top-center so it never collides with the bottom "Copied …"
+          snackbars; auto-hiding is not a permanent dismissal ("Not now" is). */}
+      <Snackbar
+        open={bioPromo !== null && !showSettings}
+        autoHideDuration={bioPromo === "done" ? 5000 : 15000}
+        onClose={(e, reason) => reason !== "clickaway" && setBioPromo(null)}
+        message={
+          bioPromo === "done"
+            ? `${biometricLabel()} turned on.`
+            : `Use ${biometricLabel()} instead of your password next time?`
+        }
+        action={
+          bioPromo === "done" ? (
+            <Button
+              sx={primarySmallButtonSx}
+              color="primary"
+              variant="contained"
+              size="small"
+              onClick={() => setBioPromo(null)}
+            >
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button
+                sx={primarySmallButtonSx}
+                color="primary"
+                variant="contained"
+                size="small"
+                onClick={enableBiometricFromPromo}
+              >
+                Enable
+              </Button>
+              <Button
+                color="inherit"
+                size="small"
+                sx={{ marginLeft: "8px" }}
+                onClick={declineBiometricPromo}
+              >
+                Not now
+              </Button>
+            </>
+          )
+        }
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
       />
     </div>
   );
