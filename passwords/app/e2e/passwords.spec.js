@@ -455,8 +455,8 @@ test.describe.serial("Full user journey", () => {
       .fill(ctx.newPassword);
     await page.getByLabel("Confirm New Password").fill(ctx.newPassword);
 
-    // Click Save.
-    await page.getByRole("button", { name: "Save" }).click();
+    // Click Change Password.
+    await page.getByRole("button", { name: "Change Password" }).click();
 
     // Wait for success message.
     await expect(page.getByText("Password updated successfully.")).toBeVisible({
@@ -464,7 +464,7 @@ test.describe.serial("Full user journey", () => {
     });
 
     // Close the settings modal.
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Close settings" }).click();
     await expect(
       page.getByRole("heading", { name: "Edit Account Info" })
     ).not.toBeVisible();

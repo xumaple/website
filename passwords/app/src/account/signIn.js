@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { errorColor, backgroundColor } from "../theme";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
+import FingerprintIcon from "@mui/icons-material/Fingerprint";
 import { encryptMaster, shaHash, checkPassword } from "../crypto/encrypt";
+import {
+  biometricLabel,
+  isBiometricEnrolled,
+  unlockBiometric,
+  clearBiometricEnrollment,
+} from "../crypto/biometric";
 import { apiCreateUser, apiVerifyUser } from "../api";
 import { showLoader, hideLoader } from "../loader/loader";
 import { KeyBinds } from "../util";
@@ -11,6 +18,11 @@ import "./account.css";
 
 const ERROR_MSG_TIME_IN_MS = 10000;
 const TOGGLE_CREATE_ACCOUNT_DELAY_IN_MS = 300;
+
+// Biometric unlock auto-fires at most once per page load: returning to the
+// sign-in screen (log out, cancelled prompt) must never re-prompt — cancel
+// means "I want to type my password". Module-level so it survives remounts.
+let autoUnlockAttempted = false;
 
 export default function SignIn({ user, backend, setAccountInfo }) {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
@@ -23,6 +35,60 @@ export default function SignIn({ user, backend, setAccountInfo }) {
   };
   const [username, setUsername] = useState(user);
   const [password, setPasswordHook] = useState("");
+  const [biometricEnrolled, setBiometricEnrolled] = useState(
+    isBiometricEnrolled()
+  );
+
+  const biometricUnlock = async () => {
+    showLoader();
+    let info;
+    try {
+      info = await unlockBiometric();
+    } catch (e) {
+      hideLoader();
+      if (e && e.name === "NotAllowedError") {
+        // User dismissed the biometric prompt — keep the enrollment.
+        return;
+      }
+      // Credential gone or blob undecryptable — enrollment is dead weight.
+      clearBiometricEnrollment();
+      setBiometricEnrolled(false);
+      setErrorMsg(
+        `${biometricLabel()} is no longer set up. Please sign in with your password.`
+      );
+      return;
+    }
+    try {
+      await apiVerifyUser(backend, { en_user: info.en_user, en_pw: info.en_pw });
+      setAccountInfo(info.username, info.en_user, info.aesKey, info.en_pw);
+    } catch (e) {
+      if (/status 4\d\d/.test(e.message)) {
+        // Server rejected the cached credentials (e.g. the master password
+        // changed elsewhere) — the enrollment is stale.
+        clearBiometricEnrollment();
+        setBiometricEnrolled(false);
+        setErrorMsg(
+          `${biometricLabel()} is out of date. Please sign in with your password.`
+        );
+      } else {
+        setErrorMsg("Unable to log in, please try again.");
+      }
+    } finally {
+      hideLoader();
+    }
+  };
+
+  useEffect(() => {
+    const shouldAttempt = !autoUnlockAttempted && biometricEnrolled;
+    autoUnlockAttempted = true;
+    if (shouldAttempt) {
+      // Browsers may refuse a WebAuthn prompt with no user gesture; that
+      // surfaces as NotAllowedError, which biometricUnlock treats as a
+      // cancel — the button and password form remain the fallback.
+      biometricUnlock();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   let submit = () => {
     if (username === "" || password === "") {
@@ -144,6 +210,27 @@ export default function SignIn({ user, backend, setAccountInfo }) {
       >
         {isCreatingAccount ? "Sign up" : "Log In"}
       </Button>
+      {!isCreatingAccount && biometricEnrolled && (
+        <Button
+          variant="outlined"
+          type="button"
+          startIcon={<FingerprintIcon />}
+          sx={{
+            ...primaryButtonSx,
+            marginTop: "12px",
+            backgroundColor: "transparent",
+            color: ACCENT,
+            borderColor: ACCENT,
+            ":hover": {
+              borderColor: ACCENT,
+              backgroundColor: "rgba(63, 80, 181, 0.08)",
+            },
+          }}
+          onClick={biometricUnlock}
+        >
+          Use {biometricLabel()}
+        </Button>
+      )}
       {isCreatingAccount ? (
         <p style={{ fontSize: "18px" }}>
           Have an account already? Log in{" "}

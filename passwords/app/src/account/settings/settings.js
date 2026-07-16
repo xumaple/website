@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import Modal from "react-modal";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Divider from "@mui/material/Divider";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import { showLoader, hideLoader } from "../../loader/loader";
 import {
   encryptMaster,
@@ -9,6 +14,13 @@ import {
   changePasswordWithKey,
   checkPassword,
 } from "../../crypto/encrypt";
+import {
+  biometricLabel,
+  isBiometricAvailable,
+  isBiometricEnrolled,
+  enrollBiometric,
+  clearBiometricEnrollment,
+} from "../../crypto/biometric";
 import "./settings.css";
 
 const customStyles = {
@@ -50,10 +62,40 @@ export default function SettingsModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [msg, setMsg] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnrolled, setBioEnrolled] = useState(isBiometricEnrolled());
 
   useEffect(() => {
     Modal.setAppElement("#account-root");
   });
+
+  useEffect(() => {
+    isBiometricAvailable().then(setBioAvailable);
+  }, []);
+
+  const enableBiometric = async () => {
+    try {
+      await enrollBiometric({
+        username,
+        en_user,
+        aesKey: currAesKey,
+        en_pw: pw,
+      });
+      setBioEnrolled(true);
+      setErrorMsg("");
+    } catch (e) {
+      if (e && e.name === "NotAllowedError") {
+        return; // user dismissed the biometric prompt
+      }
+      setMsg("");
+      setErrorMsg(`Unable to turn on ${biometricLabel()}.`);
+    }
+  };
+
+  const disableBiometric = () => {
+    clearBiometricEnrollment();
+    setBioEnrolled(false);
+  };
 
   const trySave = async () => {
     if (newPw !== newPw2) {
@@ -84,7 +126,20 @@ export default function SettingsModal({
       setPw(newPwTry);
       setAesKey(newAesKey);
       setEnPassword(newPwTry);
-      setMsg(<div className="green">Password updated successfully.</div>);
+      // The biometric enrollment caches the old credentials — clear it
+      // rather than serve a stale unlock.
+      if (isBiometricEnrolled()) {
+        clearBiometricEnrollment();
+        setBioEnrolled(false);
+        setMsg(
+          <div className="green">
+            Password updated successfully. {biometricLabel()} was turned off
+            — re-enable it above.
+          </div>
+        );
+      } else {
+        setMsg(<div className="green">Password updated successfully.</div>);
+      }
     } else {
       setMsg("");
       setErrorMsg("Unable to update password.");
@@ -113,6 +168,21 @@ export default function SettingsModal({
         closeTimeoutMS={200}
       >
         <div className="Settings-modal">
+          <Tooltip title="Close">
+            <IconButton
+              aria-label="Close settings"
+              onClick={closeModal}
+              sx={{
+                position: "absolute",
+                top: "10px",
+                right: "10px",
+                color: "rgba(200, 200, 200, 0.96)",
+                ":hover": { color: "white" },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Tooltip>
           <h2 style={{ alignSelf: "center" }}>Edit Account Info</h2>
           <div className="row">
             <div>
@@ -142,6 +212,59 @@ export default function SettingsModal({
               />
             </div>
           </div>
+          {bioAvailable && (
+            <div className="row">
+              <div style={{ width: "100%", gap: "8px", alignItems: "center" }}>
+                <Button
+                  variant="outlined"
+                  type="button"
+                  disabled={bioEnrolled}
+                  startIcon={bioEnrolled ? <CheckIcon /> : undefined}
+                  sx={{
+                    flexGrow: 1,
+                    height: "45px",
+                    borderRadius: "8px",
+                    fontWeight: "bold",
+                    color: "white",
+                    borderColor: "rgba(200, 200, 200, 0.96)",
+                    ":hover": {
+                      backgroundColor: "#3f50b5",
+                      borderColor: "rgba(200, 200, 200, 0.96)",
+                    },
+                    "&.Mui-disabled": {
+                      color: "rgb(82, 165, 82)",
+                      borderColor: "rgba(200, 200, 200, 0.4)",
+                    },
+                  }}
+                  onClick={enableBiometric}
+                >
+                  {bioEnrolled
+                    ? `${biometricLabel()} enabled`
+                    : `Use ${biometricLabel()}`}
+                </Button>
+                {bioEnrolled && (
+                  <Tooltip title={`Turn off ${biometricLabel()}`}>
+                    <IconButton
+                      aria-label={`Turn off ${biometricLabel()}`}
+                      onClick={disableBiometric}
+                      sx={{
+                        color: "rgba(200, 200, 200, 0.96)",
+                        ":hover": { color: "white" },
+                      }}
+                    >
+                      <CloseIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+          )}
+          <Divider
+            sx={{
+              borderColor: "rgba(200, 200, 200, 0.25)",
+              margin: "16px 10px 6px",
+            }}
+          />
           <div className="row">
             <div>
               <TextField
@@ -206,31 +329,12 @@ export default function SettingsModal({
             <div>{msg}</div>
             <div className="error">{errorMsg}</div>
           </div>
-          <div className="buttons">
+          <div className="row">
             <Button
               variant="outlined"
               type="button"
               sx={{
-                width: "50%",
-                height: "45px",
-                borderRadius: "8px",
-                ":hover": {
-                  backgroundColor: "#3f50b5",
-                  borderColor: "rgba(200, 200, 200, 0.96)",
-                },
-                borderColor: "rgba(200, 200, 200, 0.96)",
-                fontWeight: "bold",
-                color: "white",
-              }}
-              onClick={closeModal}
-            >
-              Back
-            </Button>
-            <Button
-              variant="outlined"
-              type="button"
-              sx={{
-                width: "50%",
+                width: "100%",
                 height: "45px",
                 borderRadius: "8px",
                 ":hover": {
@@ -243,7 +347,7 @@ export default function SettingsModal({
               }}
               onClick={trySave}
             >
-              Save
+              Change Password
             </Button>
           </div>
         </div>

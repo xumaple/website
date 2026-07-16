@@ -16,14 +16,6 @@
     padding-top: 28px;
 }
 
-.Settings-modal .buttons {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-around;
-    gap: 20px;
-    padding: 10px;
-}
-
 .Settings-modal .disabled {
     padding: 2px;
     background-color:rgba(200, 200, 200, 0.96);
@@ -42,7 +34,7 @@
 .Settings-modal .msg {
     visibility: visible;
     justify-items: end;
-    padding-bottom: 25px;
+    padding: 0 10px 6px;
     text-align: center;
 }
 
