@@ -25,8 +25,10 @@ module.exports = defineConfig({
   /* Single worker — the tests are sequential within one file by design. */
   workers: 1,
 
-  /* Generous timeout for e2e; servers may be slow to start. */
-  timeout: 60_000,
+  /* Generous timeout for e2e; servers (and the backing database) can be
+     slow - a single manage-flow test performs several mutate+refresh
+     round-trips. */
+  timeout: 120_000,
 
   use: {
     baseURL: "http://localhost:3000",

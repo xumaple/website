@@ -2,6 +2,8 @@
 name = "passwords"
 version = "0.1.0"
 edition = "2021"
+# `migrate_v2` added a second binary; keep plain `cargo run` starting the API.
+default-run = "passwords"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -28,3 +30,4 @@ http = "1.0"
 tower_governor = "0.8.0"
 dashmap = "6"
 axum-prometheus = "0.10"
+futures = "0.3"

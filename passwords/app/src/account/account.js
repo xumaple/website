@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import SettingsModal from "./settings/settings";
-import { QueryPassword, NewPassword } from "./passwords";
-import AddPasswordsModal from "./addpasswords";
+import { QueryAccount, NewAccount } from "./passwords";
+import { apiGetBucketKeys } from "../api";
 import { showLoader, hideLoader } from "../loader/loader";
 import { errorColor, backgroundColor } from "../theme";
+import { ACCENT, INK } from "./styles";
 import "./account.css";
 import userIcon from "../assets/icons/user-inverted.png";
 import Fab from "@mui/material/Fab";
@@ -17,7 +18,6 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
-import AddIcon from "@mui/icons-material/AddCircle";
 
 const TOGGLE_VIEW_DELAY_IN_MS = 300;
 const ERROR_MSG_TIME_IN_MS = 10000;
@@ -32,10 +32,14 @@ export default function Account({
 }) {
   let [isQueryView, setIsQueryView] = useState(true); // true == queryView; false == newPasswordView
   let [showSettings, setShowSettings] = useState(false);
-  let [showAddPasswords, setShowAddPasswords] = useState(false);
   let [currAesKey, setCurrAesKey] = useState(aesKey);
   let [currEnPw, setCurrEnPw] = useState(en_pw);
   const [open, setOpen] = useState(false);
+
+  const auth = useMemo(
+    () => ({ en_user, en_pw: currEnPw }),
+    [en_user, currEnPw]
+  );
 
   let [keys, setKeys] = useState(undefined);
   const addNewKey = (newKey) => {
@@ -43,41 +47,47 @@ export default function Account({
       prevKeys === undefined ? [newKey] : prevKeys.concat([newKey])
     );
   };
+  const updateKey = (oldKey, newKey) => {
+    setKeys((prevKeys) =>
+      prevKeys === undefined
+        ? prevKeys
+        : prevKeys.map((k) => (k === oldKey ? newKey : k))
+    );
+  };
+  const removeKey = (key) => {
+    setKeys((prevKeys) =>
+      prevKeys === undefined ? prevKeys : prevKeys.filter((k) => k !== key)
+    );
+  };
+  // Only one keys fetch may be in flight: this effect runs after every
+  // render, and without the guard a slow response can overlap newer state
+  // (e.g. resolve after accounts were added) and clobber the keys list.
+  const keysFetchInFlight = useRef(false);
   useEffect(() => {
-    if (keys === undefined) {
+    if (keys === undefined && !keysFetchInFlight.current) {
+      keysFetchInFlight.current = true;
       showLoader();
-      fetch(`${backend}/api/v2/keys`, {
-        method: "GET",
-        headers: {
-          "x-username": en_user,
-          "x-password": currEnPw,
-        },
-      })
-        .then((response) => {
-          if (response.status !== 200) {
-            throw new Error("Error while trying to get keys.");
-          }
-          return response.json();
-        })
+      apiGetBucketKeys(backend, auth)
         .then((updatedKeys) => {
           setKeys(updatedKeys);
         })
         .catch(() => {
-          setErrorMsg("Unable to retrieve stored passwords at this time.");
+          setErrorMsg("Unable to retrieve your accounts at this time.");
         })
         .finally(() => {
+          keysFetchInFlight.current = false;
           hideLoader();
         });
     }
   });
 
   const [errorMsg, setErrorMsgHook] = useState("");
-  const setErrorMsg = (msg) => {
+  const setErrorMsg = useCallback((msg) => {
     setTimeout(() => {
       setErrorMsgHook("");
     }, ERROR_MSG_TIME_IN_MS);
     setErrorMsgHook(msg);
-  };
+  }, []);
 
   const setQueryView = (b) => {
     showLoader();
@@ -114,18 +124,7 @@ export default function Account({
         </ListItem>
       </List>
       <List>
-        <ListItem key="AddPasswords" disablePadding>
-          <ListItemButton
-            onClick={() => {
-              setShowAddPasswords(true);
-            }}
-          >
-            <ListItemIcon>
-              <AddIcon />
-            </ListItemIcon>
-            <ListItemText primary={"Manually Add Passwords"} />
-          </ListItemButton>
-        </ListItem>
+        {/* Future: an "Import accounts (CSV)" drawer item will go here. */}
         <ListItem key="Settings" disablePadding>
           <ListItemButton
             onClick={() => {
@@ -165,20 +164,20 @@ export default function Account({
       </div>
       <div className="Account-info">
         {isQueryView ? (
-          <QueryPassword
+          <QueryAccount
             backend={backend}
-            en_user={en_user}
+            auth={auth}
             aesKey={currAesKey}
-            en_pw={currEnPw}
             keys={keys}
+            updateKey={updateKey}
+            removeKey={removeKey}
             setErrorMsg={setErrorMsg}
           />
         ) : (
-          <NewPassword
+          <NewAccount
             backend={backend}
-            en_user={en_user}
+            auth={auth}
             aesKey={currAesKey}
-            en_pw={currEnPw}
             keys={keys}
             addNewKey={addNewKey}
             setErrorMsg={setErrorMsg}
@@ -206,15 +205,15 @@ export default function Account({
               position: "absolute",
               left: 20,
               bottom: 20,
-              backgroundColor: "#3f50b5",
+              backgroundColor: ACCENT,
               color: "white",
               fontWeight: "bold",
               ":hover": {
-                backgroundColor: "#282c34"
+                backgroundColor: INK
               }
             }}
           >
-            {isQueryView ? "Add new password" : "Query an existing password"}
+            {isQueryView ? "Add a new account" : "View accounts"}
           </Fab>
         )}
       </div>
@@ -228,15 +227,6 @@ export default function Account({
         setEnPassword={setCurrEnPw}
         show={showSettings}
         stopShowing={() => setShowSettings(false)}
-      />
-      <AddPasswordsModal
-        aesKey={currAesKey}
-        en_user={en_user}
-        en_pw={currEnPw}
-        backend={backend}
-        show={showAddPasswords}
-        stopShowing={() => setShowAddPasswords(false)}
-        addNewKey={addNewKey}
       />
     </div>
   );

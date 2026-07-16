@@ -7,14 +7,19 @@ const { test, expect } = require("@playwright/test");
  * Exercises the full user journey through the React frontend and Rocket API:
  *
  *   1. Create a new user with a random username / password.
- *   2. Add a password via the default "Add new password" flow and capture it.
- *   3. Add a password via the sidebar "Manually Add Passwords" modal.
- *   4. Query both passwords and verify they are correct.
- *   5. Change the master password.
- *   6. Log out (clears browser-side state).
- *   7. Log back in with the new master password.
- *   8. Query both passwords again — confirm they survived the password change.
- *   9. Delete the test user via the API (cleanup).
+ *   2. Create an account via "Add a new account" using the [Generate] button
+ *      and capture the generated password.
+ *   3. Create an account with a typed password.
+ *   4. Create accounts with extra details (email) in the same view, several
+ *      in a row without a refresh.
+ *   5. Open the accounts and verify their passwords (and details) via the
+ *      click-to-copy box.
+ *   6. Manage an account: add / edit / delete a detail.
+ *   7. Change the master password.
+ *   8. Log out (clears browser-side state).
+ *   9. Log back in with the new master password.
+ *  10. Open the accounts again — confirm they survived the password change.
+ *  11. Delete the test user via the API (cleanup).
  *
  * The tests run sequentially (test.describe.serial) because each step depends
  * on state created by the previous one.
@@ -40,20 +45,22 @@ const ctx = {
   password: `E2ePass_${randomString(10)}`, // ≥ 13 chars
   /** SHA3-hashed username sent by the frontend to the API. Captured at sign-up. */
   hashedUsername: "",
-  /** The key name for the auto-generated password. */
+  /** The account name for the generated-password account. */
   generatedKey: `gen_key_${randomString(6)}`,
-  /** The plaintext value of the auto-generated password (captured from API). */
+  /** The plaintext value of the generated password (read from the form). */
   generatedPassword: "",
-  /** The key name for the manually-added password. */
+  /** The account name for the typed-password account. */
   manualKey: `manual_key_${randomString(6)}`,
-  /** The plaintext value of the manually-added password. */
+  /** The plaintext value of the typed password. */
   manualPassword: `ManualPw_${randomString(10)}`,
-  /** Key names for the bulk-added passwords. */
+  /** Account names for the multi-account / extra-detail steps. */
   bulkKey1: `bulk_key1_${randomString(6)}`,
   bulkKey2: `bulk_key2_${randomString(6)}`,
-  /** Plaintext values for the bulk-added passwords. */
+  /** Plaintext passwords for the bulk accounts. */
   bulkPassword1: `BulkPw1_${randomString(10)}`,
   bulkPassword2: `BulkPw2_${randomString(10)}`,
+  /** A non-secret extra detail stored on bulkKey1. */
+  emailDetail: `${randomString(8)}@example.com`,
   /** The new master password after change. */
   newPassword: `NewPass_${randomString(10)}`, // ≥ 13 chars
 };
@@ -73,7 +80,7 @@ test.describe.serial("Full user journey", () => {
     // The delete endpoint expects the same SHA3-hashed username that the
     // frontend sends during sign-up / login. We captured it in the create step.
     if (ctx.hashedUsername) {
-      await request.delete(`${API}/api/v2/user`, {
+      await request.delete(`${API}/api/v3/user`, {
         headers: {
           "x-username": ctx.hashedUsername,
           "x-password": "unused",
@@ -106,7 +113,7 @@ test.describe.serial("Full user journey", () => {
     // frontend sends to the API. We need this for cleanup in afterAll.
     const signupPromise = page.waitForRequest(
       (req) =>
-        req.url().endsWith("/api/v2/user") && req.method() === "POST"
+        req.url().endsWith("/api/v3/user") && req.method() === "POST"
     );
 
     // Submit.
@@ -117,260 +124,298 @@ test.describe.serial("Full user journey", () => {
     ctx.hashedUsername = signupReq.headers()["x-username"];
 
     // After successful sign-up we land on the account view which shows
-    // "Select a password to retrieve:" in the query view.
-    await expect(
-      page.getByText("Select a password to retrieve:")
-    ).toBeVisible({ timeout: 15_000 });
+    // "Select an account to retrieve:" in the query view.
+    await expect(page.getByText("Select an account to retrieve:")).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 2: Add a password via the default "Generate" flow
+  // Step 2: Create an account using the [Generate] button
   // ────────────────────────────────────────────────────────────────────────
-  test("add a generated password", async () => {
-    // Click the FAB to switch to the "Add new password" view.
-    await page.getByRole("button", { name: "Add new password" }).click();
-    await expect(
-      page.getByText("Enter a keyname for your password!")
-    ).toBeVisible();
+  test("create an account with a generated password", async () => {
+    // Click the FAB to switch to the "Add a new account" view.
+    await page.getByRole("button", { name: "Add a new account" }).click();
+    await expect(page.getByText("Add a new account:")).toBeVisible();
 
-    // Type the key name.
-    await page.getByLabel("New Keyname").fill(ctx.generatedKey);
+    // Type the account name.
+    await page.getByLabel("Account name").fill(ctx.generatedKey);
 
-    // Intercept the /api/v1/get/newpw response so we can capture the
-    // generated password value before it gets AES-encrypted.
-    const newPwPromise = page.waitForResponse(
-      (resp) =>
-        resp.url().includes("/api/v2/generate") && resp.status() === 200
+    // The password detail is the pre-added first row of the detail list,
+    // and its value arrives pre-populated with a generated password.
+    const passwordRow = page.getByTestId("new-detail-0");
+    await expect(passwordRow.getByLabel("label", { exact: true })).toHaveValue(
+      "password"
     );
+    const passwordValue = passwordRow.getByLabel("value", { exact: true });
+    await expect(passwordValue).not.toHaveValue("", { timeout: 30_000 });
 
-    // Click "Generate".
-    await page.getByRole("button", { name: "Generate" }).click();
-
-    // Capture the generated plaintext password from the API response.
-    const newPwResponse = await newPwPromise;
-    ctx.generatedPassword = await newPwResponse.json();
+    // Clear it and click the row's [Generate] to re-roll, so we verify the
+    // button and know exactly which value we captured.
+    await passwordValue.fill("");
+    await passwordRow.getByRole("button", { name: "Generate" }).click();
+    await expect(passwordValue).not.toHaveValue("", {
+      timeout: 30_000,
+    });
+    ctx.generatedPassword = await passwordValue.inputValue();
     expect(ctx.generatedPassword.length).toBeGreaterThan(0);
 
-    // The UI should now show "Generated a new password!".
-    await expect(page.getByText("Generated a new password!")).toBeVisible();
+    // Create the account.
+    await page.getByRole("button", { name: "Create account" }).click();
+
+    // The click-to-copy box should appear.
+    await expect(
+      page.getByText(`Created ${ctx.generatedKey}!`)
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Verify the copy box actually copies the generated password.
+    await page.context().grantPermissions([
+      "clipboard-read",
+      "clipboard-write",
+    ]);
+    const clipboardText = await clickToCopy(
+      page,
+      "Click here to copy the password."
+    );
+    expect(clipboardText).toBe(ctx.generatedPassword);
+
+    // The confirmation snackbar names what was copied.
+    await expect(
+      page.getByText(`Copied password for ${ctx.generatedKey}!`)
+    ).toBeVisible();
+
+    // The form resets so more accounts can be added in a row: the name is
+    // cleared and a single fresh password row is pre-added — and pre-filled
+    // with a newly generated password.
+    await expect(page.getByLabel("Account name")).toHaveValue("");
+    const resetRow = page.getByTestId("new-detail-0");
+    await expect(resetRow.getByLabel("label", { exact: true })).toHaveValue(
+      "password"
+    );
+    await expect(resetRow.getByLabel("value", { exact: true })).not.toHaveValue(
+      "",
+      { timeout: 30_000 }
+    );
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 2b: Reject a too-long key in the generate flow
+  // Step 2b: Reject a too-long account name
   // ────────────────────────────────────────────────────────────────────────
-  test("reject a too-long key in generate flow", async () => {
-    // We should still be in the generate view from step 2.
-    await expect(
-      page.getByText("Enter a keyname for your password!")
-    ).toBeVisible();
+  test("reject a too-long account name", async () => {
+    // We should still be in the new-account view from step 2.
+    await expect(page.getByText("Add a new account:")).toBeVisible();
 
-    // Type a key that exceeds the 128-character limit.
-    await page.getByLabel("New Keyname").fill("a".repeat(129));
+    // Type a name that exceeds the 128-character limit.
+    await page.getByLabel("Account name").fill("a".repeat(129));
 
     // The inline validation error should appear.
     await expect(
-      page.getByText("Key is too long (max 128 characters).")
+      page.getByText("Account name is too long (max 128 characters).")
     ).toBeVisible({ timeout: 5_000 });
 
-    // The Generate button should be disabled.
+    // The Create account button should be disabled.
     await expect(
-      page.getByRole("button", { name: "Generate" })
+      page.getByRole("button", { name: "Create account" })
     ).toBeDisabled();
 
     // Clear the field so subsequent tests start clean.
-    // Stay in new-password view — step 3 opens the drawer from here.
-    await page.getByLabel("New Keyname").fill("");
+    await page.getByLabel("Account name").fill("");
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 3: Add a password via the sidebar "Manually Add Passwords" modal
+  // Step 3: Create an account with a typed password
   // ────────────────────────────────────────────────────────────────────────
-  test("add a manual password via sidebar", async () => {
-    // Open the drawer by clicking the user icon.
-    await page.locator(".user").click();
+  test("create an account with a typed password", async () => {
+    await expect(page.getByText("Add a new account:")).toBeVisible();
 
-    // Wait for the drawer to fully animate and the item to be stable.
-    const manualAddBtn = page.getByText("Manually Add Passwords");
-    await expect(manualAddBtn).toBeVisible();
-    // MUI Drawer animates in — wait for animation to finish before clicking.
-    await manualAddBtn.click({ timeout: 10_000 });
-
-    // The modal should appear with "Manually Add Password" heading.
-    await expect(
-      page.getByRole("heading", { name: "Manually Add Password" })
-    ).toBeVisible();
-
-    // Fill in the key and password fields inside the modal.
-    // Scope selectors to the modal dialog to avoid ambiguity with the
-    // underlying "New Keyname" field.
-    const modal = page.locator("[role='dialog']");
-    await modal.getByLabel("key").fill(ctx.manualKey);
-    await modal.getByLabel("password").fill(ctx.manualPassword);
-
-    // Click "Save all" to upload.
-    await modal.getByRole("button", { name: "Save all" }).click();
-
-    // Wait for the upload to succeed — a green check icon appears.
-    await expect(page.locator("[data-testid='CheckCircleIcon']")).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // The row disappears after a 2s delay. Wait for the green icon to vanish,
-    // indicating the upload is fully complete and the modal can be closed.
-    await expect(
-      page.locator("[data-testid='CheckCircleIcon']")
-    ).not.toBeVisible({ timeout: 10_000 });
-
-    // Close the modal by pressing Escape.
-    await page.keyboard.press("Escape");
-    await expect(
-      page.getByRole("heading", { name: "Manually Add Password" })
-    ).not.toBeVisible({ timeout: 5_000 });
-  });
-
-  // ────────────────────────────────────────────────────────────────────────
-  // Step 3b: Reject a key that is too long in the manual-add modal
-  // ────────────────────────────────────────────────────────────────────────
-  test("reject a key that is too long", async () => {
-    // Open the drawer and click "Manually Add Passwords".
-    await page.locator(".user").click();
-    const manualAddBtn = page.getByText("Manually Add Passwords");
-    await expect(manualAddBtn).toBeVisible();
-    await manualAddBtn.click({ timeout: 10_000 });
-
-    await expect(
-      page.getByRole("heading", { name: "Manually Add Password" })
-    ).toBeVisible();
-
-    // Fill in a key that exceeds the 128-character limit.
-    const modal = page.locator("[role='dialog']");
-    await modal.getByLabel("key").fill("a".repeat(129));
-
-    // The inline validation error should appear on the key field.
-    await expect(
-      modal.getByText("Key is too long (max 128 characters).")
-    ).toBeVisible({ timeout: 5_000 });
-
-    // Close the modal.
-    await page.keyboard.press("Escape");
-    await expect(
-      page.getByRole("heading", { name: "Manually Add Password" })
-    ).not.toBeVisible({ timeout: 5_000 });
-  });
-
-  // ────────────────────────────────────────────────────────────────────────
-  // Step 3c: Add two passwords in bulk via the modal and verify both appear
-  // ────────────────────────────────────────────────────────────────────────
-  test("add multiple passwords in bulk — all show up without refresh", async () => {
-    // Open the drawer and click "Manually Add Passwords".
-    await page.locator(".user").click();
-    const manualAddBtn = page.getByText("Manually Add Passwords");
-    await expect(manualAddBtn).toBeVisible();
-    await manualAddBtn.click({ timeout: 10_000 });
-
-    await expect(
-      page.getByRole("heading", { name: "Manually Add Password" })
-    ).toBeVisible();
-
-    const modal = page.locator("[role='dialog']");
-
-    // Fill in the first key/password pair.
-    await modal.getByLabel("key").fill(ctx.bulkKey1);
-    await modal.getByLabel("password").fill(ctx.bulkPassword1);
-
-    // Add a second row.
-    await modal.getByRole("button", { name: "add another" }).click();
-
-    // Fill in the second key/password pair — there are now two rows.
-    const keyFields = modal.getByLabel("key");
-    const pwFields = modal.getByLabel("password");
-    await keyFields.nth(1).fill(ctx.bulkKey2);
-    await pwFields.nth(1).fill(ctx.bulkPassword2);
-
-    // Save both at once.
-    await modal.getByRole("button", { name: "Save all" }).click();
-
-    // Wait for both rows to finish uploading (both green check icons appear
-    // then disappear after the 2s delay).
-    await expect(page.locator("[data-testid='CheckCircleIcon']").first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(
-      page.locator("[data-testid='CheckCircleIcon']").first()
-    ).not.toBeVisible({ timeout: 10_000 });
-
-    // Close the modal.
-    await page.keyboard.press("Escape");
-    await expect(
-      page.getByRole("heading", { name: "Manually Add Password" })
-    ).not.toBeVisible({ timeout: 5_000 });
-
-    // Switch to query view and confirm BOTH bulk keys are available in the
-    // dropdown — without a page refresh. This is the regression check: before
-    // the fix only the last-uploaded key appeared.
+    await page.getByLabel("Account name").fill(ctx.manualKey);
     await page
-      .getByRole("button", { name: "Query an existing password" })
-      .click();
-    await expect(
-      page.getByText("Select a password to retrieve:")
-    ).toBeVisible();
+      .getByTestId("new-detail-0")
+      .getByLabel("value", { exact: true })
+      .fill(ctx.manualPassword);
+    await page.getByRole("button", { name: "Create account" }).click();
 
-    // Query first bulk password.
-    await queryAndVerifyPassword(page, ctx.bulkKey1, ctx.bulkPassword1);
-
-    // Query second bulk password.
-    await queryAndVerifyPassword(page, ctx.bulkKey2, ctx.bulkPassword2);
-
-    // Switch back to add-password view so the rest of the suite (step 4) can
-    // start from the right view.
-    await page.getByRole("button", { name: "Add new password" }).click();
-    await expect(
-      page.getByText("Enter a keyname for your password!")
-    ).toBeVisible();
+    await expect(page.getByText(`Created ${ctx.manualKey}!`)).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 4: Query both passwords and verify correctness
+  // Step 3b: Create accounts with extra details, several in a row
+  // ────────────────────────────────────────────────────────────────────────
+  test("create accounts with extra details in a row", async () => {
+    await expect(page.getByText("Add a new account:")).toBeVisible();
+
+    // First account: password + a non-secret email detail, each a uniform row.
+    await page.getByLabel("Account name").fill(ctx.bulkKey1);
+    await page
+      .getByTestId("new-detail-0")
+      .getByLabel("value", { exact: true })
+      .fill(ctx.bulkPassword1);
+    await page.getByRole("button", { name: "+ Add another detail" }).click();
+    const emailRow = page.getByTestId("new-detail-1");
+    await emailRow.getByLabel("label", { exact: true }).fill("email");
+    await emailRow.getByLabel("value", { exact: true }).fill(ctx.emailDetail);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page.getByText(`Created ${ctx.bulkKey1}!`)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Second account created immediately after — the form has reset.
+    await page.getByLabel("Account name").fill(ctx.bulkKey2);
+    await page
+      .getByTestId("new-detail-0")
+      .getByLabel("value", { exact: true })
+      .fill(ctx.bulkPassword2);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page.getByText(`Created ${ctx.bulkKey2}!`)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Switch to the query view and confirm both accounts are available
+    // without a page refresh (regression check for the shared keys state).
+    await page.getByRole("button", { name: "View accounts" }).click();
+    await expect(page.getByText("Select an account to retrieve:")).toBeVisible();
+
+    await queryAndVerifyPassword(page, ctx.bulkKey1, ctx.bulkPassword1);
+    await queryAndVerifyPassword(page, ctx.bulkKey2, ctx.bulkPassword2);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 4: Open both accounts and verify their passwords
   // ────────────────────────────────────────────────────────────────────────
   test("query both passwords", async () => {
-    // Switch back to query view via the FAB.
-    await page
-      .getByRole("button", { name: "Query an existing password" })
-      .click();
-    await expect(
-      page.getByText("Select a password to retrieve:")
-    ).toBeVisible();
+    await expect(page.getByText("Select an account to retrieve:")).toBeVisible();
 
-    // --- Query the generated password ---
+    // --- The generated-password account ---
     await queryAndVerifyPassword(page, ctx.generatedKey, ctx.generatedPassword);
 
-    // --- Query the manually-added password ---
+    // --- The typed-password account ---
     await queryAndVerifyPassword(page, ctx.manualKey, ctx.manualPassword);
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 4b: Error message appears when a password query fails
+  // Step 4b: Non-secret details show their value inline and copy on click
   // ────────────────────────────────────────────────────────────────────────
-  test("error message appears when password query fails", async () => {
-    // We should be in the query view from step 4.
+  test("non-secret detail shows inline and copies", async () => {
+    await selectAccount(page, ctx.bulkKey1);
+
+    // The password chip is preselected; click the email chip.
+    await page.getByRole("button", { name: "email", exact: true }).click();
+
+    // The copy box shows the detail label and the value inline.
     await expect(
-      page.getByText("Select a password to retrieve:")
+      page.getByText(`Retrieved email for ${ctx.bulkKey1}!`)
+    ).toBeVisible();
+    await expect(page.getByText(ctx.emailDetail)).toBeVisible();
+
+    // Clicking the box copies the value.
+    await page.context().grantPermissions([
+      "clipboard-read",
+      "clipboard-write",
+    ]);
+    const clipboardText = await clickToCopy(page);
+    expect(clipboardText).toBe(ctx.emailDetail);
+
+    // The confirmation snackbar names what was copied.
+    await expect(
+      page.getByText(`Copied email for ${ctx.bulkKey1}!`)
+    ).toBeVisible();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 4c: Manage an account — add, edit, and delete a detail
+  // ────────────────────────────────────────────────────────────────────────
+  test("manage an account: add, edit, delete a detail", async () => {
+    await selectAccount(page, ctx.bulkKey2);
+
+    // Expand the management panel.
+    await page.getByRole("button", { name: "Manage this account" }).click();
+    await expect(
+      page.getByRole("button", { name: "Rename account" })
     ).toBeVisible();
 
+    // --- Add a non-secret "username" detail ---
+    await page.getByRole("button", { name: "Add a detail" }).click();
+    await page.getByLabel("label", { exact: true }).fill("username");
+    await page.getByLabel("value", { exact: true }).fill("my_user_1");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+
+    // The new detail appears as a chip and as a management row.
+    await expect(
+      page.getByRole("button", { name: "username", exact: true })
+    ).toBeVisible({ timeout: 30_000 });
+    const usernameRow = page.getByTestId("detail-row-username");
+    await expect(usernameRow).toContainText("my_user_1");
+
+    // --- Edit the detail in place ---
+    await usernameRow.getByRole("button", { name: "Edit" }).click();
+    await usernameRow.getByRole("textbox").fill("my_user_2");
+    await usernameRow.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByTestId("detail-row-username")).toContainText(
+      "my_user_2",
+      { timeout: 30_000 }
+    );
+
+    // --- Delete the detail (accepting the confirm dialog) ---
+    page.once("dialog", (dialog) => dialog.accept());
+    await page
+      .getByTestId("detail-row-username")
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(page.getByTestId("detail-row-username")).not.toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      page.getByRole("button", { name: "username", exact: true })
+    ).not.toBeVisible();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 4c2: Rename an account — panel stays open, selector updates
+  // ────────────────────────────────────────────────────────────────────────
+  test("rename an account keeps the panel open and updates the selector", async () => {
+    // The management panel for bulkKey2 is still open from the previous test.
+    await page.getByRole("button", { name: "Rename account" }).click();
+
+    const renamedKey = `renamed_${randomString(6)}`;
+    await page.getByLabel("New account name").fill(renamedKey);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    // The management panel stays open, now showing the renamed account.
+    await expect(
+      page.getByRole("button", { name: "Rename account" })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("detail-row-password")).toBeVisible();
+    await expect(
+      page.getByText(`Retrieved password for ${renamedKey}!`)
+    ).toBeVisible();
+
+    // The account selector shows the new name immediately.
+    await expect(
+      page.getByRole("combobox", { name: "Select an account" })
+    ).toHaveValue(renamedKey);
+
+    ctx.bulkKey2 = renamedKey;
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 4d: Error message appears when an account query fails
+  // ────────────────────────────────────────────────────────────────────────
+  test("error message appears when account query fails", async () => {
     // The error div should be invisible initially — it has the -invis class
     // and its text color matches the background, so Playwright considers it
     // hidden. We verify the class is present and no visible error is shown.
     await expect(page.locator(".SignIn-error-invis")).toBeAttached();
     await expect(page.locator(".SignIn-error")).not.toBeAttached();
 
-    // Intercept the next password fetch and abort it to simulate a failure.
-    await page.route("**/api/v2/passwords/**", (route) => route.abort());
+    // Intercept the next account fetch and abort it to simulate a failure.
+    await page.route("**/api/v3/bucket/**", (route) => route.abort());
 
-    // Use bulkKey1 — it wasn't fetched in this component mount (step 4 only
-    // queried generated and manual keys), so selecting it triggers a fresh
-    // API call that hits the route intercept above.
+    // Selecting any account triggers a fresh API call (the account view
+    // always re-fetches on selection) that hits the intercept above.
     const autocomplete = page.getByRole("combobox", {
-      name: "Select a password key",
+      name: "Select an account",
     });
     await autocomplete.click();
     await autocomplete.fill("");
@@ -379,13 +424,13 @@ test.describe.serial("Full user journey", () => {
 
     // The error message should appear.
     await expect(
-      page.getByText("Unable to retrieve stored passwords at this time.")
-    ).toBeVisible({ timeout: 10_000 });
+      page.getByText("Unable to retrieve this account at this time.")
+    ).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(".SignIn-error")).toBeVisible();
 
     // Remove the route intercept so subsequent tests work normally.
     // Auto-clear after 10s is covered by the unit test (account.test.js).
-    await page.unroute("**/api/v2/passwords/**");
+    await page.unroute("**/api/v3/bucket/**");
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -396,7 +441,7 @@ test.describe.serial("Full user journey", () => {
     await page.locator(".user").click();
     const settingsBtn = page.getByText("Settings");
     await expect(settingsBtn).toBeVisible();
-    await settingsBtn.click({ timeout: 10_000 });
+    await settingsBtn.click({ timeout: 30_000 });
 
     // The settings modal should appear.
     await expect(
@@ -415,7 +460,7 @@ test.describe.serial("Full user journey", () => {
 
     // Wait for success message.
     await expect(page.getByText("Password updated successfully.")).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // Close the settings modal.
@@ -433,7 +478,7 @@ test.describe.serial("Full user journey", () => {
     await page.locator(".user").click();
     const logoutBtn = page.getByText("Log Out");
     await expect(logoutBtn).toBeVisible();
-    await logoutBtn.click({ timeout: 10_000 });
+    await logoutBtn.click({ timeout: 30_000 });
 
     // Should return to the sign-in page.
     await expect(page.getByText("Welcome to MapoPass")).toBeVisible();
@@ -449,19 +494,19 @@ test.describe.serial("Full user journey", () => {
     await page.getByRole("button", { name: "Log In" }).click();
 
     // Wait for the account view to load.
-    await expect(
-      page.getByText("Select a password to retrieve:")
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Select an account to retrieve:")).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Step 8: Query passwords again — they should be unchanged
+  // Step 8: Open accounts again — they should be unchanged
   // ────────────────────────────────────────────────────────────────────────
   test("passwords survive master password change", async () => {
-    // Query the generated password.
+    // The generated-password account.
     await queryAndVerifyPassword(page, ctx.generatedKey, ctx.generatedPassword);
 
-    // Query the manually-added password.
+    // The typed-password account.
     await queryAndVerifyPassword(page, ctx.manualKey, ctx.manualPassword);
   });
 });
@@ -472,7 +517,9 @@ test.describe.serial("Full user journey", () => {
 // Rust `backcompat_setup` test) can still log in through the real UI and
 // retrieve its stored passwords. The user was created with client-side hashed
 // credentials (SHA-3 via encryptMaster), so logging in with the plaintext
-// credentials exercises the full frontend crypto pipeline.
+// credentials exercises the full frontend crypto pipeline. Its legacy flat
+// passwords are expected to surface as accounts holding a single "password"
+// detail.
 
 const BACKCOMPAT_PLAINTEXT_USER = "backcompat_test_user";
 const BACKCOMPAT_PLAINTEXT_PW = "backcompat_password_123";
@@ -506,14 +553,14 @@ test.describe.serial("Backwards compatibility", () => {
     await page.getByRole("button", { name: "Log In" }).click();
 
     // Wait for the account view to load.
-    await expect(
-      page.getByText("Select a password to retrieve:")
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Select an account to retrieve:")).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("backcompat user passwords decrypt to expected plaintext values", async () => {
-    // Select each key from the dropdown, retrieve the password, and verify
-    // the decrypted value matches the expected plaintext.
+    // Select each account from the dropdown, open it, and verify the
+    // decrypted "password" detail matches the expected plaintext.
     for (const [key, expectedPlaintext] of Object.entries(BACKCOMPAT_EXPECTED_PASSWORDS)) {
       await queryAndVerifyPassword(page, key, expectedPlaintext);
     }
@@ -523,50 +570,89 @@ test.describe.serial("Backwards compatibility", () => {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Select a key from the Autocomplete dropdown, intercept the API response
- * to get the encrypted password, and verify it decrypts to the expected value.
- *
- * Because decryption happens client-side via CryptoJS and verifying it in
- * Playwright would require duplicating the crypto logic, we instead intercept
- * the /api/v2/passwords/<key> response AND read the decrypted text from the
- * UI's "Retrieved password for <key>!" alert. The alert has a "Click here to
- * copy" element — the CopyToClipboard component wraps the decrypted value.
- * However the decrypted value is NOT displayed as text; it's only in the
- * clipboard on click. So we grant clipboard permissions and read it.
+ * Select an account in the Autocomplete dropdown and wait for its view
+ * (chips + copy box) to load.
  *
  * @param {import('@playwright/test').Page} page
- * @param {string} key       - The password key name to select
- * @param {string} expected  - The expected plaintext password value
+ * @param {string} key - The account name to select
+ */
+async function selectAccount(page, key) {
+  // Target the combobox input specifically (MUI Autocomplete renders both
+  // an input[role=combobox] and a ul[role=listbox] with the same label).
+  const autocomplete = page.getByRole("combobox", {
+    name: "Select an account",
+  });
+
+  // Clear any existing selection, type the key, and pick the matching
+  // dropdown option. The MUI Autocomplete occasionally misses a programmatic
+  // fill and reports "No options", so retry the whole sequence.
+  for (let attempt = 0; ; attempt++) {
+    await autocomplete.click();
+    await autocomplete.fill("");
+    await autocomplete.fill(key);
+    try {
+      await page.getByRole("option", { name: key }).click({ timeout: 10_000 });
+      break;
+    } catch (e) {
+      if (attempt >= 2) {
+        throw e;
+      }
+    }
+  }
+
+  // Wait for the copy box, which signals the account finished loading.
+  await expect(page.getByText(`for ${key}!`)).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+/**
+ * Select an account, then verify its "password" detail decrypts to the
+ * expected value via the click-to-copy box.
+ *
+ * Because decryption happens client-side via CryptoJS and verifying it in
+ * Playwright would require duplicating the crypto logic, we use the copy box
+ * (secret values are never displayed, only copied). We grant clipboard
+ * permissions and read the copied value.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} key       - The account name to select
+ * @param {string} expected  - The expected plaintext of the password detail
  */
 async function queryAndVerifyPassword(page, key, expected) {
   // Grant clipboard-read permission so we can verify the copied value.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 
-  // Target the combobox input specifically (MUI Autocomplete renders both
-  // an input[role=combobox] and a ul[role=listbox] with the same label).
-  const autocomplete = page.getByRole("combobox", {
-    name: "Select a password key",
-  });
-  await autocomplete.click();
+  await selectAccount(page, key);
 
-  // Clear existing selection and type the key.
-  await autocomplete.fill("");
-  await autocomplete.fill(key);
-
-  // Wait for the dropdown option to appear and click it.
-  await page.getByRole("option", { name: key }).click();
-
-  // Wait for the "Retrieved password for <key>!" alert.
+  // The password detail is preselected, so the copy box shows it directly.
   await expect(
     page.getByText(`Retrieved password for ${key}!`)
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 30_000 });
 
-  // Click the alert to copy the password to clipboard.
-  await page.getByText("Click here to copy.").click();
-
-  // Read the clipboard and verify.
-  const clipboardText = await page.evaluate(() =>
-    navigator.clipboard.readText()
-  );
+  // Click the box to copy the password to the clipboard and verify.
+  const clipboardText = await clickToCopy(page);
   expect(clipboardText).toBe(expected);
+}
+
+/**
+ * Click the copy box and return the clipboard contents.
+ *
+ * The clipboard is cleared first, and the click is retried if nothing was
+ * copied (a click can be swallowed by an in-flight re-render), so a stale
+ * value from an earlier copy is never mistaken for this one. A wrong copied
+ * value still fails the caller's assertion.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string>} the copied text
+ */
+async function clickToCopy(page, copyText = "Click here to copy.") {
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  let clipboardText = "";
+  for (let attempt = 0; attempt < 5 && clipboardText === ""; attempt++) {
+    await page.getByText(copyText).click();
+    await page.waitForTimeout(200);
+    clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+  }
+  return clipboardText;
 }
